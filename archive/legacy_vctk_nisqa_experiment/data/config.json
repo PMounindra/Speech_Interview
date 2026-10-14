@@ -1,0 +1,14 @@
+{
+  "random_seed": 42,
+  "max_samples": 10000,
+  "checkpoint_size": 500,
+  "target_sr": 16000,
+  "n_mfcc": 13,
+  "n_fft": 1024,
+  "hop_length": 256,
+  "long_pause_threshold": 1.0,
+  "silence_top_db": 35,
+  "dataset_path": "C:\\Users\\Mounindra\\.cache\\kagglehub\\datasets\\vedant2022\\common-voice-dataset-version-4\\versions\\1",
+  "metadata_path": "C:\\Users\\Mounindra\\.cache\\kagglehub\\datasets\\vedant2022\\common-voice-dataset-version-4\\versions\\1\\data-file\\dev.tsv",
+  "created_at": "2026-08-19T17:09:43.625006"
+}

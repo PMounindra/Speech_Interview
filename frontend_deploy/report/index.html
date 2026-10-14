@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>InterviewSense — Report</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a;
+    --ink: #e8eaed; --quiet: #9aa3b2; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--ink);
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px;
+  }
+  .wrap { max-width: 640px; width: 100%; text-align: center; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p.sub { color: var(--quiet); margin: 0 0 32px; font-size: 14px; }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .card {
+    flex: 1; min-width: 240px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 28px 20px; text-decoration: none; color: var(--ink); transition: border-color 0.15s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .icon { font-size: 32px; margin-bottom: 12px; }
+  .card .title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .card .desc { font-size: 13px; color: var(--quiet); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>InterviewSense — Report</h1>
+  <p class="sub">Part 4: pick your role to see the right view for a processed recording.</p>
+  <div class="cards">
+    <a class="card" href="interviewer.html">
+      <div class="icon">🎙️</div>
+      <div class="title">Interviewer</div>
+      <div class="desc">Full metrics table, transcript, waveform, and a rating panel to label the recording's communication quality.</div>
+    </a>
+    <a class="card" href="interviewee.html">
+      <div class="icon">🗣️</div>
+      <div class="title">Interviewee</div>
+      <div class="desc">A plain-language summary of your delivery — what went well and what to practice, no raw numbers or jargon.</div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

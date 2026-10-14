@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>InterviewSense — Interviewer</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a;
+    --ink: #e8eaed; --quiet: #9aa3b2; --accent: #4f8cff; --warn: #e5a93a; --good: #3ac17a;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--ink); margin: 0; padding: 32px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: var(--quiet); margin-top: 0; margin-bottom: 24px; font-size: 14px; }
+
+  .pickers { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  .picker { flex: 1; min-width: 220px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .picker label { display: block; font-size: 12px; color: var(--quiet); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .picker input[type=file] { color: var(--ink); font-size: 13px; width: 100%; }
+  .picker .fname { font-size: 12px; color: var(--good); margin-top: 6px; min-height: 14px; }
+
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  section h2 { font-size: 15px; margin: 0 0 14px; color: var(--ink); }
+
+  canvas { width: 100%; height: 120px; display: block; background: #0a0c10; border-radius: 6px; }
+
+  #transcriptText { font-size: 15px; line-height: 1.7; color: var(--ink); white-space: pre-wrap; }
+  #transcriptText mark { background: rgba(229,169,58,0.25); color: var(--warn); border-radius: 3px; padding: 0 2px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--quiet); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td.val { font-weight: 600; }
+  td.note { color: var(--quiet); font-size: 13px; }
+
+  .empty { color: var(--quiet); font-size: 14px; text-align: center; padding: 20px; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat { background: #0a0c10; border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+  .stat .n { font-size: 24px; font-weight: 700; }
+  .stat .l { font-size: 11px; color: var(--quiet); margin-top: 2px; }
+
+  .nav { font-size: 13px; color: var(--quiet); margin-bottom: 16px; }
+  .nav a { color: var(--accent); text-decoration: none; }
+
+  .rating-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .rating-field label { display: block; font-size: 13px; color: var(--ink); margin-bottom: 6px; font-weight: 600; }
+  .rating-field .scale { display: flex; gap: 6px; }
+  .rating-field .scale button {
+    flex: 1; padding: 10px 0; border-radius: 6px; border: 1px solid var(--border);
+    background: #0a0c10; color: var(--quiet); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .rating-field .scale button.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+  textarea#raterNotes {
+    width: 100%; min-height: 70px; background: #0a0c10; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--ink); font-family: inherit; font-size: 14px; padding: 10px; resize: vertical;
+  }
+  #saveRatingBtn {
+    margin-top: 14px; padding: 10px 22px; border-radius: 6px; border: none; background: var(--good);
+    color: #06341c; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  #saveRatingBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #ratingStatus { margin-top: 10px; font-size: 13px; color: var(--quiet); min-height: 18px; }
+
+  .sources { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .sources button { background: #0a0c10; color: var(--ink); border: 1px solid var(--border); padding: 10px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .sources button.selected { background: var(--accent); border-color: var(--accent); }
+  .recOption { font-size: 13px; color: var(--quiet); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .recOption input { width: 16px; height: 16px; }
+  #recPreview { width: 100%; max-width: 360px; background: #000; border-radius: 6px; margin-bottom: 10px; display: block; }
+  #recTimer { font-size: 22px; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+  .recControls { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .recControls button { font-size: 14px; padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+  #recStartBtn { background: #3ac17a; color: #06341c; }
+  #recStopBtn { background: #e5576a; color: #fff; }
+  .recControls button:disabled { opacity: 0.35; cursor: not-allowed; }
+  #recStatus { font-size: 13px; color: var(--quiet); min-height: 18px; }
+  #recStatus.processing { color: var(--warn); }
+  #recStatus.error { color: #e5576a; }
+  .recSpinner {
+    display: inline-block; width: 13px; height: 13px; border: 2px solid var(--warn); border-top-color: transparent;
+    border-radius: 50%; animation: recspin 0.8s linear infinite; vertical-align: -2px; margin-right: 6px;
+  }
+  @keyframes recspin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="nav"><a href="index.html">&larr; role select</a> &middot; <a href="interviewee.html">switch to interviewee view</a></p>
+  <h1>InterviewSense — Interviewer</h1>
+  <p class="sub">Full metrics, transcript, and waveform for one processed recording, plus a communication rating you can submit to build the labeled training set.</p>
+
+  <section>
+    <h2>Record the interview</h2>
+    <div class="sources">
+      <button id="recMicBtn" class="selected" data-mode="mic">🎙️ Record Myself (mic + camera)</button>
+      <button id="recTabBtn" data-mode="tab">🖥️ Record Meeting Tab (Meet / Teams in another tab)</button>
+    </div>
+    <div class="recOption">
+      <input type="checkbox" id="recDiarizeCheckbox">
+      <label for="recDiarizeCheckbox">Two speakers (interviewer + candidate) — separate them automatically</label>
+    </div>
+    <video id="recPreview" autoplay muted playsinline></video>
+    <div id="recTimer">00:00</div>
+    <div class="recControls">
+      <button id="recStartBtn">● Start Recording</button>
+      <button id="recStopBtn" disabled>■ Stop</button>
+    </div>
+    <div id="recStatus">For a Meet/Teams call: join the call in another tab first, then click "Record Meeting Tab" here and share that tab with audio.</div>
+  </section>
+
+  <div id="autoLoadBanner" style="display:none; background:rgba(58,193,122,0.12); border:1px solid var(--good); color:var(--good); border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:20px;">
+    ✓ Auto-loaded from the recording you just made. The pickers below are optional — use them to load a different recording.
+  </div>
+  <div id="speakerPicker" style="display:none; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:20px;">
+    <div style="font-size:14px; font-weight:600; margin-bottom:4px;">This recording had two speakers — which one is the candidate?</div>
+    <div style="font-size:12px; color:var(--quiet); margin-bottom:12px;">Speakers were separated automatically (<span id="embedMethodNote"></span>). Pick whichever one answered the questions — everything below will show just their speech.</div>
+    <div id="speakerButtons" style="display:flex; gap:10px;"></div>
+  </div>
+
+  <div class="pickers">
+    <div class="picker">
+      <label>Recording (Part 1 output)</label>
+      <input type="file" id="audioInput" accept="audio/*,video/*">
+      <div class="fname" id="audioName"></div>
+    </div>
+    <div class="picker">
+      <label>transcript.json (Part 2 output)</label>
+      <input type="file" id="transcriptInput" accept="application/json,.json">
+      <div class="fname" id="transcriptName"></div>
+    </div>
+    <div class="picker">
+      <label>metrics.json (Part 3 output)</label>
+      <input type="file" id="metricsInput" accept="application/json,.json">
+      <div class="fname" id="metricsName"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Waveform</h2>
+    <canvas id="waveform" width="860" height="120"></canvas>
+    <audio id="player" controls style="width:100%; margin-top: 12px;"></audio>
+    <div class="empty" id="waveformEmpty">Load a recording to see its waveform.</div>
+  </section>
+
+  <section>
+    <h2>Key metrics</h2>
+    <div class="metrics-grid" id="statGrid"></div>
+    <div class="empty" id="metricsEmpty">Load metrics.json to see the numbers.</div>
+    <table id="metricsTable" style="display:none;"></table>
+  </section>
+
+  <section>
+    <h2>Fluency: measured + predicted, together</h2>
+    <div class="empty" id="predictionEmpty">Load metrics.json to see a prediction.</div>
+    <div id="predictionBody" style="display:none;">
+      <div class="metrics-grid" id="predictionGrid"></div>
+      <div id="predictionTop" style="font-size:13px; color:var(--quiet); margin-bottom:10px;"></div>
+      <div style="font-size:12px; color:var(--quiet); border-top:1px solid var(--border); padding-top:10px;" id="predictionCaveat"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Transcript</h2>
+    <div id="transcriptText"></div>
+    <div class="empty" id="transcriptEmpty">Load transcript.json to see the transcript.</div>
+  </section>
+
+  <section>
+    <h2>Communication rating</h2>
+    <p class="sub" style="margin-bottom:16px;">Rate this candidate's communication on each dimension (1 = poor, 5 = excellent). Submitting adds a labeled row to <code>data/collected_ratings.csv</code> — this is how a real training dataset gets built.</p>
+    <div class="rating-grid">
+      <div class="rating-field">
+        <label>Fluency</label>
+        <div class="scale" data-field="fluency_score">
+          <button data-value="1">1</button><button data-value="2">2</button><button data-value="3">3</button><button data-value="4">4</button><button data-value="5">5</button>
+        </div>
+      </div>
+      <div class="rating-field">
+        <label>Clarity</label>
+        <div class="scale" data-field="clarity_score">
+          <button data-value="1">1</button><button data-value="2">2</button><button data-value="3">3</button><button data-value="4">4</button><button data-value="5">5</button>
+        </div>
+      </div>
+      <div class="rating-field">
+        <label>Delivery</label>
+        <div class="scale" data-field="delivery_score">
+          <button data-value="1">1</button><button data-value="2">2</button><button data-value="3">3</button><button data-value="4">4</button><button data-value="5">5</button>
+        </div>
+      </div>
+      <div class="rating-field">
+        <label>Overall communication</label>
+        <div class="scale" data-field="overall_communication_score">
+          <button data-value="1">1</button><button data-value="2">2</button><button data-value="3">3</button><button data-value="4">4</button><button data-value="5">5</button>
+        </div>
+      </div>
+    </div>
+    <label for="raterNotes" style="display:block; font-size:13px; color:var(--ink); font-weight:600; margin-bottom:6px;">Notes (optional)</label>
+    <textarea id="raterNotes" placeholder="Anything specific you noticed..."></textarea>
+    <div>
+      <button id="saveRatingBtn" disabled>Submit rating</button>
+    </div>
+    <div id="ratingStatus"></div>
+  </section>
+</div>
+
+<script>
+  const FILLER_WORDS = new Set(["um", "uh", "uhm", "er", "erm", "like"]);
+  let lastAudioName = '', lastMetrics = null, lastTranscript = null;
+
+  // --- Waveform + audio playback ---
+  const audioInput = document.getElementById('audioInput');
+  const audioName = document.getElementById('audioName');
+  const waveformCanvas = document.getElementById('waveform');
+  const waveformEmpty = document.getElementById('waveformEmpty');
+  const player = document.getElementById('player');
+
+  async function renderAudio(blob, name) {
+    audioName.textContent = name || '(auto-loaded)';
+    lastAudioName = name || '';
+
+    const url = URL.createObjectURL(blob);
+    player.src = url;
+    player.style.display = 'block';
+
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      drawWaveform(audioBuffer);
+      waveformEmpty.style.display = 'none';
+      waveformCanvas.style.display = 'block';
+    } catch (err) {
+      waveformEmpty.textContent = 'Could not decode this file for a waveform (playback above may still work): ' + err.message;
+    }
+  }
+
+  audioInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) renderAudio(file, file.name);
+  });
+
+  function drawWaveform(audioBuffer) {
+    const data = audioBuffer.getChannelData(0);
+    const ctx = waveformCanvas.getContext('2d');
+    const width = waveformCanvas.width;
+    const height = waveformCanvas.height;
+    const step = Math.ceil(data.length / width);
+    const amp = height / 2;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#4f8cff';
+    for (let i = 0; i < width; i++) {
+      let min = 1.0, max = -1.0;
+      for (let j = 0; j < step; j++) {
+        const idx = i * step + j;
+        if (idx >= data.length) break;
+        const v = data[idx];
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+      ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+    }
+  }
+
+  // --- Transcript ---
+  const transcriptInput = document.getElementById('transcriptInput');
+  const transcriptName = document.getElementById('transcriptName');
+  const transcriptText = document.getElementById('transcriptText');
+  const transcriptEmpty = document.getElementById('transcriptEmpty');
+
+  function renderTranscript(data, name) {
+    if (name) transcriptName.textContent = name;
+    lastTranscript = data;
+    const rawText = data.text || '';
+    const withPhraseMarks = rawText.replace(/\b(you\s+know)\b/gi, '<mark>$1</mark>');
+    const parts = withPhraseMarks.split(/(<mark>.*?<\/mark>|\s+)/).filter(Boolean);
+    const highlighted = parts.map(part => {
+      if (part.startsWith('<mark>') || /^\s+$/.test(part)) return part;
+      const clean = part.toLowerCase().replace(/[^a-z']/g, '');
+      return FILLER_WORDS.has(clean) ? `<mark>${part}</mark>` : part;
+    }).join('');
+
+    transcriptText.innerHTML = highlighted || '(empty transcript)';
+    transcriptEmpty.style.display = 'none';
+  }
+
+  transcriptInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      transcriptEmpty.textContent = 'Could not parse transcript.json: ' + err.message;
+      return;
+    }
+    renderTranscript(data, file.name);
+  });
+
+  // --- Metrics ---
+  const metricsInput = document.getElementById('metricsInput');
+  const metricsName = document.getElementById('metricsName');
+  const metricsEmpty = document.getElementById('metricsEmpty');
+  const statGrid = document.getElementById('statGrid');
+  const metricsTable = document.getElementById('metricsTable');
+
+  const STAT_CARDS = [
+    { key: 'wpm_speech_duration', label: 'Words / min', fmt: v => Math.round(v) },
+    { key: 'pause_count', label: 'Pauses', fmt: v => v },
+    { key: 'pause_ratio', label: 'Pause ratio', fmt: v => (v * 100).toFixed(1) + '%' },
+    { key: 'fillers_per_100_words', label: 'Fillers / 100 words', fmt: v => v.toFixed(1) },
+    { key: 'speech_ratio', label: 'Speech ratio', fmt: v => (v * 100).toFixed(1) + '%' },
+    { key: 'word_count', label: 'Word count', fmt: v => v },
+  ];
+
+  const TABLE_ROWS = [
+    ['total_duration_seconds', 'Total duration', 's', 'Length of the recording'],
+    ['wpm_speech_duration', 'Words per minute', 'wpm', 'Moderate, controlled pace is roughly 120–160 wpm'],
+    ['pause_count', 'Pause count', '', 'Gaps detected between speech segments'],
+    ['mean_pause_duration', 'Average pause duration', 's', ''],
+    ['maximum_pause_duration', 'Longest pause', 's', 'Long single pauses can signal hesitation'],
+    ['pause_ratio', 'Pause ratio', '%', 'Share of the recording spent in pauses'],
+    ['total_filler_count', 'Filler word count', '', '"um", "uh", "like", "you know"'],
+    ['fillers_per_100_words', 'Fillers per 100 words', '', ''],
+    ['speech_duration_seconds', 'Speech duration', 's', ''],
+    ['silence_duration_seconds', 'Silence duration', 's', ''],
+    ['speech_ratio', 'Speech ratio', '%', 'Share of the recording that is active speech'],
+    ['word_count', 'Word count', '', ''],
+  ];
+
+  function fmtVal(key, v) {
+    if (v === null || v === undefined) return '—';
+    if (key.endsWith('_ratio')) return (v * 100).toFixed(1) + '%';
+    if (typeof v === 'number') return Number.isInteger(v) ? v : v.toFixed(2);
+    return v;
+  }
+
+  function renderMetrics(data, name) {
+    if (name) metricsName.textContent = name;
+    lastMetrics = data;
+    statGrid.innerHTML = STAT_CARDS.filter(c => data[c.key] !== undefined && data[c.key] !== null).map(c => `
+      <div class="stat">
+        <div class="n">${c.fmt(data[c.key])}</div>
+        <div class="l">${c.label}</div>
+      </div>
+    `).join('');
+
+    const rows = TABLE_ROWS.filter(([key]) => data[key] !== undefined);
+    metricsTable.innerHTML = `
+      <tr><th>Metric</th><th>Value</th><th>Note</th></tr>
+      ${rows.map(([key, label, unit, note]) => `
+        <tr>
+          <td>${label}</td>
+          <td class="val">${fmtVal(key, data[key])}${unit && !key.endsWith('_ratio') ? ' ' + unit : ''}</td>
+          <td class="note">${note}</td>
+        </tr>
+      `).join('')}
+    `;
+
+    metricsEmpty.style.display = 'none';
+    metricsTable.style.display = 'table';
+  }
+
+  metricsInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      metricsEmpty.textContent = 'Could not parse metrics.json: ' + err.message;
+      return;
+    }
+    renderMetrics(data, file.name);
+    await fetchPrediction(data);
+  });
+
+  // --- Predicted fluency ---
+  const predictionEmpty = document.getElementById('predictionEmpty');
+  const predictionBody = document.getElementById('predictionBody');
+  const predictionGrid = document.getElementById('predictionGrid');
+  const predictionTop = document.getElementById('predictionTop');
+  const predictionCaveat = document.getElementById('predictionCaveat');
+
+  function renderPrediction(result) {
+    if (!result || result.error) {
+      predictionEmpty.textContent = (result && result.error) || 'Model not available yet (has training/train_communication_model.py been run?)';
+      predictionEmpty.style.display = 'block';
+      predictionBody.style.display = 'none';
+      return;
+    }
+    const m = result.measured, p = result.predicted;
+    predictionGrid.innerHTML = `
+      <div class="stat"><div class="n">${Math.round(m.wpm_speech_duration)}</div><div class="l">WPM (measured)</div></div>
+      <div class="stat"><div class="n">${m.pause_count}</div><div class="l">Pauses (measured)</div></div>
+      <div class="stat"><div class="n">${(m.fillers_per_100_words ?? 0).toFixed(1)}</div><div class="l">Fillers/100w (measured)</div></div>
+      <div class="stat"><div class="n">${p.fluency_score}</div><div class="l">Fluency /10 (predicted)</div></div>
+      <div class="stat"><div class="n">${p.communication_level}</div><div class="l">Level (${Math.round(p.communication_level_confidence*100)}% conf., predicted)</div></div>
+    `;
+    predictionTop.textContent = 'Top contributing features to the prediction: ' +
+      p.top_contributing_features.map(f => `${f.feature} (${f.contribution > 0 ? '+' : ''}${f.contribution})`).join(', ');
+    predictionCaveat.textContent = result.model_caveat;
+    predictionEmpty.style.display = 'none';
+    predictionBody.style.display = 'block';
+  }
+
+  async function fetchPrediction(metrics) {
+    try {
+      const resp = await fetch('/api/predict', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metrics),
+      });
+      const result = await resp.json();
+      if (!resp.ok) { renderPrediction({ error: result.error || 'prediction request failed' }); return; }
+      renderPrediction(result);
+    } catch (err) {
+      predictionEmpty.textContent = 'Could not reach the prediction API: ' + err.message;
+    }
+  }
+
+  // --- Rating panel ---
+  const ratings = {};
+  document.querySelectorAll('.rating-field .scale').forEach(scale => {
+    const field = scale.dataset.field;
+    scale.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        ratings[field] = Number(btn.dataset.value);
+        scale.querySelectorAll('button').forEach(b => b.classList.toggle('selected', b === btn));
+        updateSaveButton();
+      });
+    });
+  });
+
+  const saveRatingBtn = document.getElementById('saveRatingBtn');
+  const ratingStatus = document.getElementById('ratingStatus');
+  const REQUIRED_FIELDS = ['fluency_score', 'clarity_score', 'delivery_score', 'overall_communication_score'];
+
+  function updateSaveButton() {
+    saveRatingBtn.disabled = !REQUIRED_FIELDS.every(f => ratings[f] !== undefined);
+  }
+
+  saveRatingBtn.addEventListener('click', async () => {
+    const payload = {
+      recording_filename: lastAudioName,
+      transcript: lastTranscript?.text || '',
+      fluency_score: ratings.fluency_score,
+      clarity_score: ratings.clarity_score,
+      delivery_score: ratings.delivery_score,
+      overall_communication_score: ratings.overall_communication_score,
+      rater_notes: document.getElementById('raterNotes').value,
+      wpm_speech_duration: lastMetrics?.wpm_speech_duration ?? '',
+      pause_ratio: lastMetrics?.pause_ratio ?? '',
+      fillers_per_100_words: lastMetrics?.fillers_per_100_words ?? '',
+      speech_ratio: lastMetrics?.speech_ratio ?? '',
+      rated_at: new Date().toISOString(),
+    };
+
+    ratingStatus.textContent = 'Saving...';
+    try {
+      const resp = await fetch('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      ratingStatus.textContent = 'Saved to data/collected_ratings.csv.';
+      ratingStatus.style.color = 'var(--good)';
+    } catch (err) {
+      ratingStatus.textContent = 'Could not save (is the rating server running? see report/server.py): ' + err.message;
+      ratingStatus.style.color = 'var(--warn)';
+    }
+  });
+
+  // --- Auto-load from a just-recorded session (set by capture/index.html's /api/process call) ---
+  async function loadResultIntoView(result, bannerText) {
+    document.getElementById('autoLoadBanner').style.display = 'block';
+    document.getElementById('autoLoadBanner').textContent = bannerText;
+
+    if (result.audio_url) {
+      try {
+        const resp = await fetch(result.audio_url);
+        const blob = await resp.blob();
+        await renderAudio(blob, result.recording_filename || result.audio_url.split('/').pop());
+      } catch (err) {
+        waveformEmpty.textContent = 'Could not load the audio: ' + err.message;
+      }
+    }
+    if (result.transcript) renderTranscript(result.transcript, 'transcript.json (auto)');
+    if (result.metrics) renderMetrics(result.metrics, 'metrics.json (auto)');
+    if (result.prediction) renderPrediction(result.prediction);
+  }
+
+  // Shared by: a session handed off from capture/index.html (sessionStorage) AND a recording
+  // made directly on this page (the new Record section below) -- same result shape either way.
+  function handleProcessResult(result, singleSpeakerBannerText) {
+    if (result.diarized && result.speakers) {
+      const picker = document.getElementById('speakerPicker');
+      const buttonsEl = document.getElementById('speakerButtons');
+      document.getElementById('embedMethodNote').textContent =
+        result.embed_method === 'resemblyzer' ? 'voice-based clustering' : 'acoustic-feature clustering';
+      picker.style.display = 'block';
+
+      buttonsEl.innerHTML = result.speakers.map(s => `
+        <button data-speaker="${s.speaker}" style="flex:1; padding:14px; border-radius:8px; border:1px solid var(--border); background:#0a0c10; color:var(--ink); cursor:pointer; font-size:14px;">
+          Speaker ${s.speaker + 1}<br><span style="font-size:12px; color:var(--quiet);">${s.total_speech_seconds.toFixed(0)}s speaking</span>
+        </button>
+      `).join('');
+
+      buttonsEl.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          buttonsEl.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--border)');
+          btn.style.borderColor = 'var(--accent)';
+          const chosen = result.speakers[Number(btn.dataset.speaker)];
+          loadResultIntoView(chosen, `✓ Showing Speaker ${chosen.speaker + 1}'s speech only, separated automatically from the full recording.`);
+        });
+      });
+      // Default to whichever speaker talked more -- often the candidate, answering questions
+      // at length, but the interviewer should confirm with the buttons above.
+      const longest = [...result.speakers].sort((a, b) => b.total_speech_seconds - a.total_speech_seconds)[0];
+      buttonsEl.querySelector(`button[data-speaker="${longest.speaker}"]`).click();
+      return;
+    }
+
+    document.getElementById('speakerPicker').style.display = 'none';
+    loadResultIntoView(result, singleSpeakerBannerText);
+  }
+
+  function autoLoadFromSession() {
+    const raw = sessionStorage.getItem('interviewsense_session');
+    if (!raw) return;
+    let session;
+    try { session = JSON.parse(raw); } catch (err) { return; }
+    handleProcessResult(session, '✓ Auto-loaded from the recording you just made. The pickers below are optional — use them to load a different recording.');
+  }
+
+  autoLoadFromSession();
+
+  // --- Record directly on this page ---
+  const recMicBtn = document.getElementById('recMicBtn');
+  const recTabBtn = document.getElementById('recTabBtn');
+  const recDiarizeCheckbox = document.getElementById('recDiarizeCheckbox');
+  const recPreview = document.getElementById('recPreview');
+  const recTimer = document.getElementById('recTimer');
+  const recStartBtn = document.getElementById('recStartBtn');
+  const recStopBtn = document.getElementById('recStopBtn');
+  const recStatus = document.getElementById('recStatus');
+
+  let recMediaRecorder, recChunks = [], recStream, recTimerInterval, recStartTime, recSourceMode = 'mic';
+
+  function recFormatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+
+  function recSelectSource(mode) {
+    recSourceMode = mode;
+    recMicBtn.classList.toggle('selected', mode === 'mic');
+    recTabBtn.classList.toggle('selected', mode === 'tab');
+    recDiarizeCheckbox.checked = (mode === 'tab');
+  }
+  recMicBtn.addEventListener('click', () => recSelectSource('mic'));
+  recTabBtn.addEventListener('click', () => recSelectSource('tab'));
+
+  async function recStart() {
+    try {
+      if (recSourceMode === 'tab') {
+        recStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      } else {
+        recStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      }
+    } catch (err) {
+      const label = recSourceMode === 'tab' ? 'screen/tab share' : 'camera/microphone';
+      recStatus.className = 'error';
+      recStatus.textContent = `Could not access ${label}: ` + err.message;
+      return;
+    }
+
+    if (recSourceMode === 'tab' && recStream.getAudioTracks().length === 0) {
+      recStatus.className = 'error';
+      recStatus.textContent = 'No audio track was shared — check "Share tab audio" in the picker, then try again.';
+      recStream.getTracks().forEach(t => t.stop());
+      return;
+    }
+
+    recPreview.srcObject = recStream;
+    recChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    recMediaRecorder = new MediaRecorder(recStream, { mimeType });
+    recMediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recChunks.push(e.data); };
+
+    recStream.getVideoTracks()[0].addEventListener('ended', () => {
+      if (recMediaRecorder && recMediaRecorder.state === 'recording') recStop();
+    });
+
+    recMediaRecorder.onstop = async () => {
+      const blob = new Blob(recChunks, { type: mimeType });
+      recStream.getTracks().forEach(t => t.stop());
+      await recProcess(blob, mimeType);
+    };
+
+    recMediaRecorder.start();
+    recStartTime = Date.now();
+    recTimerInterval = setInterval(() => { recTimer.textContent = recFormatTime(Date.now() - recStartTime); }, 200);
+
+    recStartBtn.disabled = true;
+    recStopBtn.disabled = false;
+    recMicBtn.disabled = true;
+    recTabBtn.disabled = true;
+    recStatus.className = '';
+    recStatus.textContent = 'Recording…';
+  }
+
+  function recStop() {
+    recMediaRecorder.stop();
+    clearInterval(recTimerInterval);
+    recStartBtn.disabled = false;
+    recStopBtn.disabled = true;
+    recMicBtn.disabled = false;
+    recTabBtn.disabled = false;
+  }
+
+  async function recProcess(blob, mimeType) {
+    const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+    const diarize = recDiarizeCheckbox.checked;
+    recStatus.className = 'processing';
+    recStatus.innerHTML = `<span class="recSpinner"></span>Recording ready (${sizeMB} MB). ${diarize ? 'Separating speakers, transcribing, and measuring' : 'Transcribing and measuring'} — this can take up to a couple minutes...`;
+
+    try {
+      const resp = await fetch(`/api/process?diarize=${diarize ? '1' : '0'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType.split(';')[0] },
+        body: blob,
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const result = await resp.json();
+
+      recStatus.className = '';
+      recStatus.textContent = 'Done — results loaded below.';
+      handleProcessResult(result, '✓ Loaded from the recording you just made above.');
+      document.getElementById('autoLoadBanner')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      recStatus.className = 'error';
+      recStatus.textContent = 'Could not process the recording (is report/server.py running?): ' + err.message;
+    }
+  }
+
+  recStartBtn.addEventListener('click', recStart);
+  recStopBtn.addEventListener('click', recStop);
+</script>
+</body>
+</html>

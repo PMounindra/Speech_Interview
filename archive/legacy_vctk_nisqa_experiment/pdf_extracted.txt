@@ -1,0 +1,811 @@
+--- PAGE 1 ---
+InterviewSense — Complete Project Explanation
+Page 1
+InterviewSense
+Complete Technical Explanation of the Laptop-Optimized Speech Quality Pipeline
+Primary method: Handcrafted acoustic features + XGBoost regression
+External comparison: eGeMAPS + XGBoost
+Target: NISQA Mean Opinion Score (MOS), 1–5
+Evaluation: Hold-out test metrics + 5-fold GroupKFold
+This document explains the project from the audio input stage through feature extraction, NISQA label repair,
+supervised learning, external feature comparison, cross-validation, interpretation, limitations, and what the results
+do—and do not—prove.
+Prepared from the final InterviewSense laptop notebook and the completed experiment outputs.
+
+--- PAGE 2 ---
+InterviewSense — Complete Project Explanation
+Page 2
+1. Executive Summary
+InterviewSense is a speech-analysis research pipeline designed to convert spoken audio into quantitative acoustic
+descriptors and use those descriptors to predict a human-rated speech quality score. The current laptop experiment
+is deliberately smaller than a full-scale research pipeline: it processes up to 10,000 VCTK recordings and 2,000
+NISQA recordings and reuses saved feature checkpoints so that repeated notebook runs are fast.
+The central supervised target is the NISQA Mean Opinion Score (MOS). NISQA provides human ratings of
+perceived speech quality on a 1–5 scale. Therefore, the experimentally validated task is speech-quality
+regression. It is not yet a validated interview-fluency, communication-skill, or candidate-performance score.
+The project has two feature representations. The primary representation is a compact handcrafted acoustic
+representation consisting of 48 numeric features covering timing, silence and pauses, energy, zero-crossing rate,
+pitch, spectral characteristics, and 13 MFCCs with mean and standard deviation statistics. The comparison
+representation is eGeMAPSv02, an established speech-feature set. Both representations are evaluated using the
+same XGBoost regression family so that the main experimental difference is the feature representation.
+The completed run produced 12,000 extracted feature rows: 10,000 VCTK and 2,000 NISQA. Correct NISQA
+metadata matching recovered 1,036 valid MOS labels from the 2,000 NISQA feature rows. The primary model
+achieved a test MAE of 0.5912, RMSE of 0.7240, and R² of 0.4797. The eGeMAPS comparison achieved MAE
+0.5731, RMSE 0.7301, and R² 0.4709.
+What the project demonstrates
+G
+How raw speech can be transformed into structured acoustic measurements.
+G
+How a human-rated speech-quality target can be recovered from corpus metadata.
+G
+How a regression model can learn a relationship between acoustic characteristics and perceived speech quality.
+G
+How an established feature representation such as eGeMAPS can be used as an external baseline.
+G
+How repeated evaluation through 5-fold GroupKFold can provide a more stable estimate than a single split.
+G
+How to build the pipeline so expensive audio feature extraction is checkpointed and does not need to be
+repeated.
+Most important scope statement
+Do not present the current MOS predictor as an interview communication score. The model has been trained and
+evaluated against NISQA MOS. To make a scientifically valid claim about interview fluency or communication quality,
+the project needs a human-rated interview/communication dataset whose labels directly represent that target.
+2. Problem Statement and Motivation
+Speech contains information at several levels. Some information is linguistic—what a person says—while other
+information is paralinguistic or acoustic—how the speech sounds. Timing, pauses, energy, pitch, spectral distribution
+and cepstral characteristics can all be measured without requiring the system to understand the entire semantic
+content of an utterance.
+InterviewSense uses this acoustic route because it is computationally practical on a laptop and provides
+interpretable measurements. The idea is to create a repeatable numerical representation of speech and then learn a
+mapping from that representation to a human rating.
+The research question in the present experiment can therefore be stated as:
+Can a compact handcrafted acoustic representation predict human-rated speech quality, and how does its
+performance compare with an established speech representation such as eGeMAPS?
+
+--- PAGE 3 ---
+InterviewSense — Complete Project Explanation
+Page 3
+Why this is useful for the larger InterviewSense idea
+G
+A speech-analysis system needs measurable signals before it can produce feedback.
+G
+Acoustic features are inexpensive compared with large end-to-end deep-learning systems.
+G
+A compact feature vector makes it easier to inspect which properties influence predictions.
+G
+An external baseline prevents the project from evaluating its own representation in isolation.
+G
+NISQA provides a genuine human-rated numeric target, making it suitable for a supervised regression baseline.
+3. Overall System Architecture
+The complete pipeline can be understood as the following sequence:
+Raw Audio → Dataset Sampling → Audio Normalization → Acoustic Feature Extraction → Feature Checkpointing →
+NISQA MOS Label Mapping → Labelled Dataset → Group-Based Split → XGBoost Regression → Test Evaluation →
+eGeMAPS Baseline → 5-Fold Group Cross-Validation → Feature Importance + Diagnostics
+1
+Dataset acquisition: VCTK and NISQA are obtained through KaggleHub.
+2
+Sampling: only 10,000 VCTK and 2,000 NISQA recordings are used in the laptop experiment.
+3
+Audio processing: audio is loaded at 16 kHz and converted to mono.
+4
+Feature extraction: timing, pause, energy, pitch, spectral and MFCC descriptors are computed.
+5
+Checkpointing: feature CSVs are saved in batches so interrupted runs can resume.
+6
+Label repair: NISQA MOS is read from the correct corpus CSV and matched by audio filename.
+7
+Supervised subset: only NISQA rows with valid numeric MOS labels are used for training.
+8
+Split: the notebook uses GroupShuffleSplit for train/validation/test partitioning.
+9
+Primary model: XGBRegressor learns to predict MOS from the 48 handcrafted features.
+10
+External baseline: eGeMAPSv02 features are extracted from the same labelled recordings and passed to the
+same XGBoost family.
+11
+Validation: the primary representation is evaluated with 5-fold GroupKFold.
+12
+Interpretation: metrics, feature importance and true-vs-predicted diagnostics are produced.
+4. Datasets
+Dataset
+Role in project
+Amount used
+Label status
+VCTK SR16k
+Acoustic feature development /
+broader speech feature
+population
+10,000 recordings
+No supervised MOS target used
+NISQA
+Supervised speech-quality
+regression
+2,000 recordings processed
+1,036 MOS-labelled rows used
+Speech Accent Archive
+Configured reference dataset
+Not processed in final
+supervised run
+No compatible target used
+Santa Barbara Corpus
+Configured reference dataset
+Not processed in final
+supervised run
+No compatible target used
+
+--- PAGE 4 ---
+InterviewSense — Complete Project Explanation
+Page 4
+VCTK
+The VCTK SR16k Kaggle dataset is used as a large English multi-speaker speech source. The notebook samples
+10,000 recordings rather than processing all available recordings. The filename pattern also allows a speaker
+identifier to be inferred for VCTK recordings such as p225_001.wav → p225.
+NISQA
+NISQA is the key supervised dataset. Its metadata contains human-rated MOS values. The metadata file used in the
+successful run contains 14,432 rows and 21 columns, including fields such as filename_deg, filename_ref,
+mos, noise, coloration, distortion, loudness and their standard deviations.
+All 14,432 metadata rows have a non-null MOS in the metadata table. The feature pipeline, however, only
+processed 2,000 NISQA audio files. Filename-based matching successfully recovered MOS for 1,036 of those 2,000
+processed recordings.
+Why the other datasets are not supervised targets
+The Speech Accent Archive and Santa Barbara Corpus are retained in configuration/reference context, but the final
+notebook does not use them as supervised training targets because their available metadata does not provide a
+directly compatible human-rated interview/fluency target.
+5. Acoustic Feature Extraction
+The project's main representation is handcrafted rather than a learned embedding. The extractor uses librosa to
+convert each waveform into a fixed-length numerical vector. Fixed-length vectors are important because XGBoost
+expects tabular input where each row represents one recording and each column represents a feature.
+Audio preprocessing
+G
+Audio is loaded using librosa at a target sampling rate of 16,000 Hz.
+G
+Audio is converted to mono.
+G
+Empty audio files are rejected.
+G
+The waveform duration is calculated from the number of samples divided by the sampling rate.
+G
+A simple energy-based speech/silence segmentation is obtained with librosa.effects.split.
+Feature family 1 — Timing and speech activity
+Feature
+Meaning
+duration
+Total recording duration in seconds.
+speech_duration
+Estimated time classified as speech.
+silence_duration
+Duration not classified as speech.
+speech_ratio
+speech_duration / duration.
+pause_count
+Number of positive gaps between detected speech intervals.
+avg_pause_duration
+Average duration of detected pauses.
+max_pause_duration
+Longest detected pause.
+These features quantify temporal organization. For example, a recording with large silence_duration or a low
+speech_ratio contains relatively less detected speech activity. Pause statistics describe the distribution of gaps
+
+--- PAGE 5 ---
+InterviewSense — Complete Project Explanation
+Page 5
+between speech regions.
+Feature family 2 — Energy
+Feature
+Meaning
+rms_mean
+Mean root-mean-square energy across frames.
+rms_std
+Standard deviation of frame-level RMS energy.
+RMS energy is a measure of signal amplitude. Its mean captures overall energy level while its standard deviation
+captures how much the energy changes over time.
+Feature family 3 — Zero-crossing rate
+Feature
+Meaning
+zcr_mean
+Mean zero-crossing rate.
+zcr_std
+Standard deviation of zero-crossing rate.
+Zero-crossing rate measures how frequently the waveform changes sign. It is sensitive to signal characteristics such
+as noisiness and high-frequency content and can complement spectral features.
+Feature family 4 — Pitch
+Feature
+Meaning
+pitch_mean
+Mean finite fundamental-frequency estimate.
+pitch_median
+Median fundamental-frequency estimate.
+pitch_std
+Pitch variability.
+pitch_min
+Minimum finite pitch estimate.
+pitch_max
+Maximum finite pitch estimate.
+pitch_range
+pitch_max − pitch_min.
+voiced_frame_ratio
+Fraction of frames with a finite pitch estimate.
+Pitch is estimated using librosa.pyin with a search range around the human voice region. The extractor removes
+non-finite pitch estimates before computing summary statistics.
+Feature family 5 — Spectral features
+Feature
+Meaning
+spec_centroid_mean
+Average spectral centroid.
+spec_centroid_std
+Variation in spectral centroid.
+spec_bandwidth_mean
+Average spectral bandwidth.
+spec_bandwidth_std
+Variation in spectral bandwidth.
+The spectral centroid can be interpreted as a brightness-related center of mass of the spectrum, while spectral
+bandwidth describes how spread out the spectrum is around its centroid.
+Feature family 6 — MFCCs
+
+--- PAGE 6 ---
+InterviewSense — Complete Project Explanation
+Page 6
+The extractor computes 13 Mel-frequency cepstral coefficients. For each MFCC, the notebook stores both its mean
+and standard deviation. That produces 13 × 2 = 26 MFCC-derived features.
+MFCCs summarize the short-term spectral envelope on a perceptually motivated Mel scale. They are widely used in
+speech and audio processing because they provide a compact representation of spectral shape.
+Final handcrafted feature count
+48 features total: 7 timing/silence + 2 RMS + 2 ZCR + 7 pitch/voicing + 4 spectral + 26 MFCC statistics.
+6. Laptop Optimization and Checkpointing
+A major engineering decision was to make the pipeline practical on a normal laptop. The notebook does not use
+Whisper in the current run and uses CPU-parallel acoustic extraction. It also saves feature checkpoints every 250
+recordings.
+G
+VCTK limit: 10,000 recordings.
+G
+NISQA limit: 2,000 recordings.
+G
+Whisper: disabled for the laptop run.
+G
+Checkpoint interval: 250 files.
+G
+Existing VCTK/NISQA feature CSVs are loaded if they already exist.
+G
+Only unprocessed file keys are extracted on a resumed run.
+G
+Feature rows are deduplicated by file_key.
+This checkpoint design explains why later notebook executions were fast. The expensive operation is audio feature
+extraction. Once the feature CSVs exist, the notebook can load them directly and move to label repair and modelling
+without recomputing thousands of waveforms.
+7. NISQA MOS Label Repair — The Critical Data Fix
+The original pipeline had a major data-integration problem: the extracted NISQA rows existed, but the target column
+contained no usable MOS labels. The corrected notebook explicitly searches for a CSV containing both a MOS
+column and a file-path/filename column.
+The successful metadata file was the NISQA corpus CSV. It contains the degraded filename and MOS. The
+notebook takes the basename of the metadata path and the basename of each extracted audio file, then creates a
+dictionary from filename to MOS.
+For every NISQA feature row, the target is assigned by looking up the lowercased filename. This is why the repaired
+pipeline changed the target availability from 0 labelled NISQA rows to 1,036 labelled rows.
+Successful mapping result
+Quantity
+Result
+NISQA metadata rows
+14,432
+NISQA metadata columns
+21
+Processed NISQA feature rows
+2,000
+Matched MOS labels
+1,036
+Unmatched MOS labels
+964
+
+--- PAGE 7 ---
+InterviewSense — Complete Project Explanation
+Page 7
+Quantity
+Result
+MOS minimum
+1.000
+MOS maximum
+5.000
+MOS mean
+2.908
+MOS median
+2.800
+Only the 1,036 rows with genuine numeric MOS values are allowed into supervised learning. VCTK remains useful
+for feature development but does not enter the MOS regression target set.
+8. Supervised Learning Dataset
+After label repair, the notebook filters df_features to rows where dataset = NISQA and target is non-null. The target
+is explicitly converted to numeric and any remaining invalid values are removed.
+Property
+Value
+Supervised dataset
+NISQA
+Labelled samples
+1,036
+Target
+NISQA MOS
+Target range
+1.0–5.0
+Primary feature count
+48
+Task type
+Regression
+Model family
+XGBoost Regressor
+Non-feature columns such as dataset, speaker_id, file_name, file_key, target and group_id are excluded. Only
+numeric acoustic columns are passed to the model.
+9. Train / Validation / Test Strategy
+The notebook uses GroupShuffleSplit rather than a completely unrestricted random row split. The intention is to
+keep recordings belonging to the same group together. The first split creates approximately 70% training and 30%
+temporary data. The temporary data is then split equally into validation and test, giving an intended 70/15/15
+structure.
+Split
+Samples in completed run
+Approx. proportion
+Train
+725
+70%
+Validation
+155
+15%
+Test
+156
+15%
+Total
+1,036
+100%
+The notebook performs explicit intersection checks between train, validation and test group sets. The completed run
+reported that the group leakage test passed.
+Important interpretation of the current grouping
+The notebook constructs NISQA group_id by removing the final condition suffix from the filename, e.g.
+c00001_for_cnv_f_0104_02.wav becomes c00001_for_cnv_f_0104. In the completed run, however, the reported
+
+--- PAGE 8 ---
+InterviewSense — Complete Project Explanation
+Page 8
+labelled-sample group count was effectively one group per labelled sample. Therefore, the GroupShuffleSplit
+mechanism itself was used correctly, but the available grouping did not provide strong speaker/source aggregation in
+that run.
+For reporting, it is safer to say that the experiment used a group-aware split and passed its explicit non-overlap
+check, rather than claiming that the results are fully speaker-independent.
+10. Numerical Preprocessing
+Before modelling, the feature matrices are cleaned. Positive and negative infinity values are replaced with NaN.
+Missing values are then filled using medians calculated from the training set.
+The same training medians are applied to validation and test data. This is important because computing imputation
+statistics from the full dataset could leak information from the validation/test sets into training.
+11. Primary Model — XGBoost Regression
+The primary model is XGBRegressor. XGBoost is a gradient-boosted decision-tree method. Instead of training one
+tree, it builds a sequence of trees where each new tree attempts to correct errors made by the previous ensemble.
+For this project, the model receives a 48-dimensional acoustic vector and outputs one continuous number: the
+predicted NISQA MOS.
+Hyperparameter
+Value
+n_estimators
+500
+max_depth
+5
+learning_rate
+0.03
+subsample
+0.8
+colsample_bytree
+0.8
+objective
+reg:squarederror
+eval_metric
+rmse
+random_state
+42
+n_jobs
+-1
+Why regression?
+MOS is continuous. A score of 3.7 contains more information than simply assigning a class such as good or bad.
+Regression therefore preserves the numeric nature of the human rating.
+12. Evaluation Metrics
+Metric
+Meaning
+Desired direction
+MAE
+Average absolute prediction error in MOS
+units.
+Lower is better
+RMSE
+Square root of average squared prediction
+error; penalizes larger errors more strongly.
+Lower is better
+R²
+Fraction of target variance explained relative
+to a constant-mean baseline.
+Higher is better
+
+--- PAGE 9 ---
+InterviewSense — Complete Project Explanation
+Page 9
+MAE intuition
+An MAE of 0.5912 means that, on average, the model's predicted MOS differs from the human MOS by about 0.59
+MOS points on the evaluated test set.
+RMSE intuition
+RMSE of 0.7240 is larger than MAE because RMSE gives more weight to larger mistakes. It is therefore useful for
+detecting whether a model occasionally makes substantially wrong predictions.
+R² intuition
+R² = 0.4797 means the model explains approximately 48% of the variance in the held-out target values relative to a
+mean-only reference. It does not mean the model is 47.97% accurate.
+13. Primary Model Results
+Metric
+Primary handcrafted features + XGBoost
+MAE
+0.5912
+RMSE
+0.7240
+R²
+0.4797
+These results indicate that the acoustic representation contains substantial predictive information about perceived
+speech quality. At the same time, the R² value shows that a large portion of variation remains unexplained. That is
+expected for a compact acoustic representation predicting subjective human ratings.
+14. External Validation Model — eGeMAPS
+The faculty requirement for comparison with an existing approach is addressed through eGeMAPS. eGeMAPS is an
+established speech feature representation designed to capture interpretable voice and paralinguistic characteristics.
+The project uses eGeMAPSv02 at the Functionals level.
+The comparison is intentionally controlled: the same labelled recordings are used, the same target is used, and the
+same XGBoost regression family is used. Therefore, the feature representation is the major change between the two
+experiments.
+Approach
+Feature count
+MAE
+RMSE
+R²
+InterviewSense
+handcrafted features +
+XGBoost
+48
+0.5912
+0.7240
+0.4797
+eGeMAPS + XGBoost
+88
+0.5731
+0.7301
+0.4709
+Interpretation: eGeMAPS obtains a slightly lower MAE, while the InterviewSense handcrafted representation
+obtains slightly lower RMSE and slightly higher R². Therefore, the two approaches are best described as broadly
+comparable rather than declaring an outright winner.
+Why this is a good cross-validation comparison
+G
+It compares against an established speech representation rather than an arbitrary second classifier.
+G
+Both representations are evaluated on the same task.
+G
+Both use XGBoost, reducing the chance that the comparison is mainly caused by a different model family.
+
+--- PAGE 10 ---
+InterviewSense — Complete Project Explanation
+Page 10
+G
+MAE, RMSE and R² provide complementary views of performance.
+G
+The comparison shows that a compact 48-feature representation can remain competitive with a larger established
+representation.
+15. Five-Fold Group Cross-Validation
+A single train/test split can be sensitive to which recordings happen to fall into each partition. The notebook therefore
+performs five-fold GroupKFold evaluation on the primary representation.
+For each fold, the data is divided into training and validation subsets according to group IDs. An XGBoost model is
+trained from scratch for that fold and evaluated on its held-out fold. The notebook records MAE, RMSE and R² for
+every fold.
+Fold
+MAE
+RMSE
+R²
+1
+0.6648
+0.8588
+0.3765
+2
+0.6380
+0.7890
+0.5014
+3
+0.6405
+0.8291
+0.4138
+4
+0.6599
+0.8031
+0.4440
+5
+0.6238
+0.7927
+0.4598
+Mean ± SD
+0.6454 ± 0.0168
+0.8145 ± 0.0293
+0.4391 ± 0.0472
+The standard deviations quantify how much the metric changes from fold to fold. The relatively modest MAE
+variation indicates reasonably consistent error, while R² varies more because explained variance is sensitive to the
+distribution of target values in each fold.
+16. Feature Importance and Interpretability
+The notebook extracts XGBoost feature_importances_ values and sorts the 48 handcrafted features from most to
+least important. This creates a feature-importance table that can be saved as primary_feature_importance.csv.
+Feature importance should be interpreted as model usage, not as proof of causation. If a feature has high
+importance, it means the fitted model relied strongly on it when making predictions; it does not prove that changing
+that acoustic property would necessarily change the human MOS.
+The feature families themselves provide a useful interpretability layer: timing features describe speech/silence
+organization, pitch features describe fundamental-frequency behavior, energy features describe amplitude, spectral
+features describe frequency distribution, and MFCC statistics describe spectral-envelope characteristics.
+17. Prediction Diagnostics
+The notebook also produces a true-versus-predicted MOS scatter plot. The x-axis contains the true NISQA MOS
+values and the y-axis contains model predictions. A diagonal reference line represents perfect prediction.
+Points close to the diagonal indicate good predictions. Systematic compression toward the center can reveal a
+model that predicts extreme ratings conservatively. Outliers far from the diagonal identify recordings where acoustic
+information was insufficient or the learned relationship did not generalize well.
+18. Output Files and What They Mean
+
+--- PAGE 11 ---
+InterviewSense — Complete Project Explanation
+Page 11
+File
+Purpose
+features_all_repaired.csv
+12,000-row processed feature dataset with repaired NISQA targets
+where available.
+features_all.csv
+Saved feature dataset from the notebook's label-repair stage.
+model_comparison_results.csv
+Primary handcrafted representation versus eGeMAPS comparison
+metrics.
+group_cross_validation_results.csv
+Per-fold 5-fold GroupKFold metrics.
+primary_feature_importance.csv
+Feature-importance ranking from the primary XGBoost model.
+feature_checkpoints/vctk_features.csv
+Checkpointed VCTK acoustic features.
+feature_checkpoints/nisqa_features.csv
+Checkpointed NISQA acoustic features.
+The checkpoint files are particularly important for laptop use. They prevent repeated audio extraction. The final CSV
+outputs are useful for reports, plots, and reproducibility.
+19. End-to-End Walk-Through of One Audio File
+1
+An audio file is selected from VCTK or NISQA.
+2
+librosa loads it at 16 kHz and converts it to mono.
+3
+The waveform duration is calculated.
+4
+RMS and zero-crossing-rate sequences are calculated frame by frame.
+5
+Speech intervals are detected using energy-based splitting.
+6
+Speech duration, silence duration, speech ratio and pause statistics are derived.
+7
+pYIN estimates pitch; finite pitch values are summarized.
+8
+An STFT is computed and spectral centroid/bandwidth statistics are obtained.
+9
+13 MFCCs are calculated and each coefficient is summarized by mean and standard deviation.
+10
+The resulting 48-value vector is stored together with dataset, speaker/file identifiers and target placeholder.
+11
+The feature row is checkpointed to CSV.
+12
+For NISQA, the filename is matched against the NISQA metadata and MOS is attached.
+13
+Only rows with valid MOS become supervised examples.
+14
+The example is assigned to a group and placed into the group-aware train/validation/test workflow.
+15
+XGBoost uses the acoustic vector to predict MOS.
+16
+The same recording can also be represented by eGeMAPS for the external comparison.
+20. Why VCTK Is Not the Training Target
+A dataset can be useful for feature engineering without being suitable as the supervised target dataset. VCTK
+provides a large amount of multi-speaker speech, but the final experiment needs a numeric human-rated target.
+NISQA provides that target through MOS.
+Combining VCTK and NISQA directly into one supervised target without a common label definition would be
+methodologically incorrect. Therefore, VCTK is retained as a feature-development resource while NISQA supplies
+
+--- PAGE 12 ---
+InterviewSense — Complete Project Explanation
+Page 12
+the labelled regression examples.
+21. Why the Laptop Uses 10,000 + 2,000 Instead of the
+Full Corpora
+The project is engineered for a laptop rather than a GPU workstation. Processing every available audio recording
+would increase extraction time and storage requirements without being necessary to demonstrate the core
+experimental pipeline.
+G
+10,000 VCTK recordings provide a substantial acoustic feature-development population.
+G
+2,000 NISQA recordings are enough to create a useful supervised subset while keeping extraction practical.
+G
+Checkpointing allows the experiment to resume instead of starting over.
+G
+The supervised experiment ultimately uses only the 1,036 NISQA rows for which MOS was successfully matched.
+This is a reasonable prototype-scale experimental design. A final research paper could scale the sample size after
+the pipeline has been validated.
+22. What the Model Is Actually Learning
+The model is not directly learning the meaning of an interview answer. It is learning statistical relationships between
+measurable acoustic patterns and perceived speech quality ratings in the NISQA corpus.
+For example, a combination of timing, energy, pitch and spectral characteristics may correlate with higher or lower
+perceived quality. XGBoost can represent nonlinear interactions among these variables. It does not require a linear
+assumption such as 'more pitch variation always means better speech.'
+Because the target is subjective MOS, there will naturally be irreducible variation. Different listeners can rate the
+same speech differently, and acoustic features do not capture every factor that influences perception.
+23. Strengths of the Current Project
+G
+Clear separation between feature extraction and supervised target construction.
+G
+A genuine human-rated numeric target rather than a synthetic label.
+G
+A compact and interpretable 48-feature representation.
+G
+Laptop-friendly implementation with checkpointing and CPU parallelism.
+G
+External comparison against established eGeMAPS features.
+G
+Multiple evaluation metrics rather than relying on one number.
+G
+Five-fold cross-validation in addition to a held-out test set.
+G
+Saved CSV outputs make the experiment easy to inspect and report.
+G
+The project explicitly documents that NISQA MOS is speech quality rather than interview communication.
+24. Limitations
+Limitation
+Consequence
+NISQA MOS measures speech quality, not interview communication
+Current model cannot be claimed as a validated
+interviewer/candidate communication score.
+
+--- PAGE 13 ---
+InterviewSense — Complete Project Explanation
+Page 13
+Limitation
+Consequence
+Only 1,036 of 2,000 processed NISQA rows received MOS
+Supervised sample size is smaller than the processed audio count.
+Current group IDs are not strong speaker-level groups in the
+completed run
+The group-aware mechanism passed non-overlap checks, but
+speaker-independent generalization is not fully established.
+Handcrafted features are compact
+Some linguistic, contextual and semantic information is absent.
+XGBoost is a tabular regressor
+It does not directly model raw waveform sequences or long temporal
+dependencies.
+Subjective MOS contains listener variability
+Perfect prediction is not expected.
+Laptop-scale sampling
+Results may change with a larger and more diverse sample.
+25. Future Work — Turning the Baseline into
+InterviewSense
+The current experiment is best viewed as the validated acoustic foundation of InterviewSense. The next stage
+should change the target from generic speech quality to the actual interview objective.
+1
+Collect or obtain a human-rated interview dataset with labels such as fluency, clarity, confidence, relevance,
+articulation or communication quality.
+2
+Define a precise target and annotation protocol before training.
+3
+Use the existing 48-feature extractor as a baseline representation.
+4
+Compare the handcrafted features with eGeMAPS and, later, learned speech embeddings.
+5
+Use verified speaker-level grouping so that a speaker cannot appear across training and evaluation.
+6
+Evaluate generalization on completely unseen speakers.
+7
+Add temporal models if frame-level or segment-level information becomes necessary.
+8
+Build a feedback layer that maps model outputs to actionable recommendations.
+9
+Add calibration and uncertainty estimation so the system can indicate when a prediction is unreliable.
+10
+Perform ablation studies to determine which feature families actually contribute to performance.
+26. Proposed Final InterviewSense Architecture
+Microphone / Audio File
+↓
+Audio Preprocessing — resampling, mono conversion, quality checks
+↓
+Speech Segmentation / VAD — speech, silence and pauses
+↓
+Acoustic Feature Extraction — timing + energy + pitch + spectrum + MFCC/eGeMAPS
+↓
+Speaker-Level Aggregation
+↓
+Validated Interview Model — regression or multi-task prediction
+↓
+Score + Confidence
+↓
+
+--- PAGE 14 ---
+InterviewSense — Complete Project Explanation
+Page 14
+Feedback Engine — specific, evidence-based interview recommendations
+27. Faculty / Viva Questions You Should Be Ready For
+What is the exact target?
+NISQA MOS, a human-rated perceived speech-quality score from 1 to 5.
+Is this an interview communication score?
+No. The current experiment validates speech-quality regression. A human-rated interview dataset is required for that
+claim.
+Why XGBoost?
+The input is structured tabular acoustic features, and XGBoost can model nonlinear relationships efficiently on CPU.
+Why not classify MOS?
+MOS is naturally continuous, so regression preserves more information than forcing it into discrete classes.
+Why use eGeMAPS?
+It is an established speech-feature representation and provides an external feature-level baseline.
+Why use the same XGBoost model for comparison?
+It keeps the regressor approximately constant so the feature representation is the main experimental difference.
+Why do you need cross-validation?
+A single split can be noisy. Five-fold GroupKFold shows how performance varies across several held-out folds.
+What is MAE?
+Mean absolute error: the average absolute difference between predicted and true MOS.
+What does R² = 0.4797 mean?
+The model explains about 48% of the variance in the evaluated target relative to a mean-only baseline; it is not 48%
+accuracy.
+Why did the notebook become fast after the first run?
+The expensive acoustic features were saved as checkpoints and loaded instead of recomputed.
+Why only 1,036 labelled samples?
+Only those NISQA recordings had a successful filename-to-MOS metadata match among the 2,000 processed
+recordings.
+Why not use all VCTK for training?
+VCTK does not provide the same compatible human-rated MOS target used by NISQA.
+28. How to Present the Results
+
+--- PAGE 15 ---
+InterviewSense — Complete Project Explanation
+Page 15
+A strong presentation should not claim that the model is perfect or that it already measures interview skill. Instead,
+frame the work as a controlled acoustic speech-quality experiment and explain how it forms the technical foundation
+for a future interview-specific model.
+Recommended statement: “We developed a laptop-optimized acoustic speech-quality regression pipeline using 48
+handcrafted acoustic features and XGBoost. On the current NISQA experiment, the model achieved MAE 0.5912,
+RMSE 0.7240 and R² 0.4797. We compared the representation against eGeMAPSv02 using the same XGBoost
+regression family, where eGeMAPS achieved MAE 0.5731, RMSE 0.7301 and R² 0.4709. Five-fold GroupKFold on the
+primary representation produced mean MAE 0.6454 ± 0.0168, RMSE 0.8145 ± 0.0293 and R² 0.4391 ± 0.0472.”
+29. Reproducibility Checklist
+G
+Use the interviewsense Python environment.
+G
+Ensure numpy, pandas, scipy, scikit-learn, librosa, soundfile, tqdm, joblib, kagglehub, xgboost, opensmile and
+plotting dependencies are installed.
+G
+Keep the random seed at 42 for the reported experiment.
+G
+Keep the 10,000 VCTK / 2,000 NISQA laptop limits if reproducing the current run.
+G
+Keep the feature checkpoint directory so extraction does not restart.
+G
+Use the NISQA corpus CSV containing MOS and filepath information.
+G
+Confirm that approximately 1,036 NISQA rows receive MOS before training.
+G
+Run the same XGBoost hyperparameters.
+G
+Run both the primary and eGeMAPS comparisons.
+G
+Save the three principal result CSVs.
+30. Conclusion
+InterviewSense currently provides a complete, reproducible acoustic speech-quality baseline. The system starts with
+speech recordings, extracts a compact 48-dimensional acoustic representation, repairs genuine NISQA MOS labels,
+trains an XGBoost regression model, compares that representation against eGeMAPS, and evaluates stability
+through five-fold group-aware cross-validation.
+The completed experiment demonstrates that the handcrafted representation contains useful information for
+predicting perceived speech quality. Its test performance is competitive with the eGeMAPS comparison under the
+same XGBoost modelling family: the handcrafted representation has slightly better RMSE and R², while eGeMAPS
+has slightly better MAE.
+The central scientific limitation is also clear: NISQA MOS is a speech-quality label, not an interview communication
+label. Consequently, the current project should be presented as the acoustic baseline and methodological
+foundation for InterviewSense. The next major research step is to obtain human-rated interview data and
+retrain/evaluate the system against the actual communication objectives.
+Bottom line: the current pipeline is not a fake or placeholder experiment. It has a real human-rated target, a
+reproducible feature-extraction process, a primary regression model, an established external feature comparison, and
+cross-validation. What remains is to connect that validated acoustic machinery to a genuinely interview-specific target.
+31. Source and Scope Note
+This document was prepared from the uploaded/final InterviewSense_Laptop_Corrected_CrossValidation notebook,
+the project feature-extraction code, and the completed experiment outputs reported during the project work. The
+
+--- PAGE 16 ---
+InterviewSense — Complete Project Explanation
+Page 16
+notebook itself defines the pipeline as a laptop-optimized speech-quality experiment and explicitly warns against
+interpreting NISQA MOS as an interview communication score.
+The exact model results, split sizes and NISQA mapping statistics in this report correspond to the completed run
+discussed during the project session. If the notebook is rerun with different samples, package versions, or changed
+random seeds, small metric differences are possible.
+

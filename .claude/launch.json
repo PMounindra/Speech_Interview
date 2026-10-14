@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "report/server.py",
+        "--port",
+        "8766"
+      ],
+      "port": 8766
+    }
+  ]
+}

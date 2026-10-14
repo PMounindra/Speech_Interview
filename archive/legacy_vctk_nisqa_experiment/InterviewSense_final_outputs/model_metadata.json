@@ -1,0 +1,20 @@
+{
+  "target": "overall_score",
+  "speaker_column": "speaker_id",
+  "features": [
+    "speech_duration_sec",
+    "pause_count",
+    "word_count"
+  ],
+  "acoustic_features": [
+    "speech_duration_sec",
+    "pause_count"
+  ],
+  "linguistic_features": [
+    "word_count"
+  ],
+  "primary_model": "Ridge",
+  "comparison_model": "RandomForestRegressor",
+  "validation": "GroupKFold + unseen-speaker holdout",
+  "random_seed": 42
+}

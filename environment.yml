@@ -1,0 +1,23 @@
+name: interviewsense
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - jupyter
+  - ipykernel
+  - pip
+  - pip:
+      - librosa
+      - soundfile
+      - xgboost
+      - seaborn
+      - tqdm
+      - joblib

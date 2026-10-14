@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>InterviewSense — Capture</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #111; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 32px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: #999; margin-top: 0; margin-bottom: 24px; }
+  video { width: 480px; max-width: 90vw; background: #000; border-radius: 8px; margin-bottom: 16px; }
+  .controls { display: flex; gap: 12px; margin-bottom: 16px; }
+  button { font-size: 15px; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+  #startBtn { background: #2f7; color: #063; }
+  #stopBtn { background: #e55; color: #fff; }
+  #downloadBtn { background: #37f; color: #fff; text-decoration: none; display: inline-block; }
+  button:disabled, a.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  #status { margin-top: 8px; color: #9c9; min-height: 20px; }
+  #timer { font-size: 28px; font-variant-numeric: tabular-nums; margin: 8px 0; }
+</style>
+</head>
+<body>
+  <h1>InterviewSense — Capture</h1>
+  <p class="sub">Part 1: record the candidate's audio + video, then hand the file to Part 2 (transcript) and Part 3 (metrics).</p>
+
+  <video id="preview" autoplay muted playsinline></video>
+  <div id="timer">00:00</div>
+
+  <div class="controls">
+    <button id="startBtn">● Start Recording</button>
+    <button id="stopBtn" disabled>■ Stop</button>
+    <a id="downloadBtn" class="disabled" download="interview_recording.webm">⬇ Download Recording</a>
+  </div>
+
+  <div id="status">Click "Start Recording" and allow camera/microphone access.</div>
+
+<script>
+  const preview = document.getElementById('preview');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const statusEl = document.getElementById('status');
+  const timerEl = document.getElementById('timer');
+
+  let mediaRecorder;
+  let chunks = [];
+  let stream;
+  let timerInterval;
+  let startTime;
+
+  function formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+
+  async function startRecording() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (err) {
+      statusEl.textContent = 'Could not access camera/microphone: ' + err.message;
+      return;
+    }
+
+    preview.srcObject = stream;
+    chunks = [];
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : 'video/webm';
+
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      downloadBtn.href = url;
+      downloadBtn.classList.remove('disabled');
+      const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+      statusEl.textContent = `Recording ready (${sizeMB} MB). Click "Download Recording", then hand the file to Part 2 and Part 3.`;
+      stream.getTracks().forEach(t => t.stop());
+    };
+
+    mediaRecorder.start();
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+      timerEl.textContent = formatTime(Date.now() - startTime);
+    }, 200);
+
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    downloadBtn.classList.add('disabled');
+    statusEl.textContent = 'Recording…';
+  }
+
+  function stopRecording() {
+    mediaRecorder.stop();
+    clearInterval(timerInterval);
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+
+  startBtn.addEventListener('click', startRecording);
+  stopBtn.addEventListener('click', stopRecording);
+</script>
+</body>
+</html>

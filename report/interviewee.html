@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>InterviewSense — Your Feedback</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a;
+    --ink: #e8eaed; --quiet: #9aa3b2; --accent: #4f8cff; --warn: #e5a93a; --good: #3ac17a;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--ink); margin: 0; padding: 32px; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  p.sub { color: var(--quiet); margin-top: 0; margin-bottom: 24px; font-size: 14px; }
+  .nav { font-size: 13px; color: var(--quiet); margin-bottom: 16px; }
+  .nav a { color: var(--accent); text-decoration: none; }
+
+  .picker { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 24px; }
+  .picker label { display: block; font-size: 12px; color: var(--quiet); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .picker input[type=file] { color: var(--ink); font-size: 13px; width: 100%; }
+
+  .empty { color: var(--quiet); font-size: 14px; text-align: center; padding: 40px 20px; }
+
+  .headline {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px; margin-bottom: 20px; display: none;
+  }
+  .headline .big { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .headline .sub2 { color: var(--quiet); font-size: 14px; }
+
+  .points { display: none; margin-bottom: 20px; }
+  .point {
+    display: flex; gap: 12px; align-items: flex-start; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .point .icon { font-size: 18px; line-height: 1.4; }
+  .point .text { font-size: 14px; line-height: 1.5; }
+  .point.good .icon { color: var(--good); }
+  .point.watch .icon { color: var(--warn); }
+
+  audio { width: 100%; margin-top: 8px; }
+  .player-section { display: none; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .player-section h2 { font-size: 14px; margin: 0 0 10px; color: var(--quiet); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .disclaimer { font-size: 12px; color: var(--quiet); text-align: center; margin-top: 24px; }
+
+  .recSection { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 24px; }
+  .recSection h2 { font-size: 15px; margin: 0 0 12px; }
+  #recPreview { width: 100%; max-width: 320px; background: #000; border-radius: 6px; margin-bottom: 10px; display: block; }
+  #recTimer { font-size: 20px; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+  .recControls { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .recControls button { font-size: 14px; padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+  #recStartBtn { background: var(--good); color: #06341c; }
+  #recStopBtn { background: #e5576a; color: #fff; }
+  .recControls button:disabled { opacity: 0.35; cursor: not-allowed; }
+  #recStatus { font-size: 13px; color: var(--quiet); min-height: 18px; }
+  #recStatus.processing { color: var(--warn); }
+  #recStatus.error { color: #e5576a; }
+  .recSpinner {
+    display: inline-block; width: 13px; height: 13px; border: 2px solid var(--warn); border-top-color: transparent;
+    border-radius: 50%; animation: recspin 0.8s linear infinite; vertical-align: -2px; margin-right: 6px;
+  }
+  @keyframes recspin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="nav"><a href="index.html">&larr; role select</a> &middot; <a href="interviewer.html">switch to interviewer view</a></p>
+  <h1>Your Interview Feedback</h1>
+  <p class="sub">A plain-language summary of how you communicated — no jargon, just what to keep doing and what to work on.</p>
+
+  <div class="recSection">
+    <h2>Practice by recording yourself</h2>
+    <video id="recPreview" autoplay muted playsinline></video>
+    <div id="recTimer">00:00</div>
+    <div class="recControls">
+      <button id="recStartBtn">● Start Recording</button>
+      <button id="recStopBtn" disabled>■ Stop</button>
+    </div>
+    <div id="recStatus">Answer a practice interview question out loud, then click Stop to see your feedback below.</div>
+  </div>
+
+  <div class="picker">
+    <label>Or load an already-processed recording</label>
+    <input type="file" id="audioInput" accept="audio/*,video/*">
+  </div>
+  <div class="picker">
+    <label>Load metrics.json</label>
+    <input type="file" id="metricsInput" accept="application/json,.json">
+  </div>
+
+  <div class="empty" id="emptyState">Record yourself above, or load an already-processed recording + metrics.json.</div>
+
+  <div class="headline" id="headline">
+    <div class="big" id="headlineText"></div>
+    <div class="sub2" id="headlineSub"></div>
+  </div>
+
+  <div class="points" id="points"></div>
+
+  <div class="player-section" id="playerSection">
+    <h2>Listen back</h2>
+    <audio id="player" controls></audio>
+  </div>
+
+  <p class="disclaimer">These observations are generated from objective speech measurements (pace, pauses, filler words). They describe this one recording, not a final judgment of your abilities.</p>
+</div>
+
+<script>
+  const audioInput = document.getElementById('audioInput');
+  const metricsInput = document.getElementById('metricsInput');
+  const emptyState = document.getElementById('emptyState');
+  const headline = document.getElementById('headline');
+  const headlineText = document.getElementById('headlineText');
+  const headlineSub = document.getElementById('headlineSub');
+  const pointsEl = document.getElementById('points');
+  const playerSection = document.getElementById('playerSection');
+  const player = document.getElementById('player');
+
+  function renderAudio(blob) {
+    player.src = URL.createObjectURL(blob);
+    playerSection.style.display = 'block';
+  }
+
+  audioInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) renderAudio(file);
+  });
+
+  metricsInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    let m;
+    try {
+      m = JSON.parse(await file.text());
+    } catch (err) {
+      emptyState.textContent = 'Could not read that metrics file: ' + err.message;
+      return;
+    }
+    render(m);
+  });
+
+  async function render(m, knownPrediction) {
+    emptyState.style.display = 'none';
+
+    const points = [];
+    const wpm = m.wpm_speech_duration;
+    const pauseRatio = m.pause_ratio;
+    const fillerRate = m.fillers_per_100_words;
+    const speechRatio = m.speech_ratio;
+    const longestPause = m.maximum_pause_duration;
+
+    // Pace
+    if (wpm != null) {
+      // Thresholds backed by evidence, not a guess: published native-speaker conversational
+      // baseline is ~130-200 WPM (Language Log corpus study, n=11,700), and our own training
+      // data (5,000 recordings, real human fluency ratings) showed rated fluency rising with
+      // WPM across its whole observed range (96 WPM median for low-rated fluency, up to 157+
+      // for high-rated), with no "too fast" penalty showing up even above 200 WPM.
+      if (wpm >= 100 && wpm <= 200) {
+        points.push({ kind: 'good', text: `Your speaking pace was steady and easy to follow, at about ${Math.round(wpm)} words per minute — within the range typical of fluent speakers.` });
+      } else if (wpm > 200) {
+        points.push({ kind: 'good', text: `You spoke quickly — about ${Math.round(wpm)} words per minute. Faster pacing didn't correlate with lower fluency ratings in our training data, but very fast delivery can still feel rushed to a live interviewer, so it's worth a gut-check rather than a hard rule.` });
+      } else if (wpm > 0) {
+        points.push({ kind: 'watch', text: `Your pace was on the slower side — about ${Math.round(wpm)} words per minute, below the ~100-200 wpm range typical of fluent speakers in our reference data. A slightly faster, more energetic pace can help you sound more confident.` });
+      }
+    }
+
+    // Pauses
+    if (pauseRatio != null) {
+      if (pauseRatio <= 0.15) {
+        points.push({ kind: 'good', text: 'Your delivery was smooth, with relatively few long pauses breaking up your answers.' });
+      } else {
+        points.push({ kind: 'watch', text: 'There were several noticeable pauses in your answers. Practicing your key points out loud beforehand can help you speak more continuously.' });
+      }
+    }
+    if (longestPause != null && longestPause >= 2.5) {
+      points.push({ kind: 'watch', text: `At one point you paused for about ${longestPause.toFixed(1)} seconds. A brief pause to think is fine, but a long silence can make an answer feel unfinished — try a short bridging phrase like "let me think about that" instead.` });
+    }
+
+    // Fillers
+    if (fillerRate != null) {
+      if (fillerRate <= 5) {
+        points.push({ kind: 'good', text: 'You used very few filler words ("um", "uh", "like"), which made your answers sound clear and prepared.' });
+      } else if (fillerRate <= 15) {
+        points.push({ kind: 'watch', text: `You used filler words ("um", "uh", "like") a moderate amount. Cutting down further can make you sound even more confident.` });
+      } else {
+        points.push({ kind: 'watch', text: `Filler words ("um", "uh", "like") showed up frequently in your answers. Pausing silently instead of saying "um" often reads as more confident.` });
+      }
+    }
+
+    // Speech ratio
+    if (speechRatio != null) {
+      if (speechRatio >= 0.7) {
+        points.push({ kind: 'good', text: 'You kept talking steadily through your answers without long gaps of silence.' });
+      }
+    }
+
+    // Headline
+    const watchCount = points.filter(p => p.kind === 'watch').length;
+    headline.style.display = 'block';
+    if (watchCount === 0) {
+      headlineText.textContent = 'Strong, clear delivery overall.';
+      headlineSub.textContent = 'Your pacing, pauses, and filler-word usage were all in a good range.';
+    } else if (watchCount <= 2) {
+      headlineText.textContent = 'Good delivery, with a couple of things to sharpen.';
+      headlineSub.textContent = 'See below for the specific moments worth practicing.';
+    } else {
+      headlineText.textContent = 'A few delivery habits are worth practicing before your next interview.';
+      headlineSub.textContent = 'None of these are dealbreakers — they’re the kind of thing that improves fast with a little practice.';
+    }
+
+    pointsEl.innerHTML = points.map(p => `
+      <div class="point ${p.kind}">
+        <div class="icon">${p.kind === 'good' ? '✓' : '⚠'}</div>
+        <div class="text">${p.text}</div>
+      </div>
+    `).join('');
+    pointsEl.style.display = 'block';
+
+    // Optional: a plain-language fluency-level line from the trained model, if it's running.
+    // If the caller already has a prediction (e.g. auto-loaded from /api/process), skip the
+    // extra round trip to /api/predict and just use it directly.
+    try {
+      const result = knownPrediction || await (await fetch('/api/predict', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m),
+      })).json();
+      if (result && !result.error) {
+        const level = result.predicted.communication_level;
+        const levelWords = { Low: 'still developing', Medium: 'solidly in the typical range', High: 'notably strong' }[level] || level;
+        const extra = document.createElement('div');
+        extra.className = 'point good';
+        extra.innerHTML = `<div class="icon">ℹ️</div><div class="text">Based on a model trained on fluency-rated speech, your overall fluency on this recording looks <strong>${levelWords}</strong>. (This is an estimate from one trained model, not a final judgment.)</div>`;
+        pointsEl.appendChild(extra);
+      }
+    } catch (err) {
+      // Prediction API not running -- the rule-based feedback above still stands on its own.
+    }
+  }
+
+  // --- Auto-load from a just-recorded session (set by capture/index.html's /api/process call) ---
+  async function loadResultIntoView(result) {
+    if (result.audio_url) {
+      try {
+        const resp = await fetch(result.audio_url);
+        renderAudio(await resp.blob());
+      } catch (err) { /* waveform/player just won't show; feedback still works */ }
+    }
+    if (result.metrics) render(result.metrics, result.prediction);
+  }
+
+  async function autoLoadFromSession() {
+    const raw = sessionStorage.getItem('interviewsense_session');
+    if (!raw) return;
+    let session;
+    try { session = JSON.parse(raw); } catch (err) { return; }
+
+    if (session.diarized && session.speakers && session.speakers.length) {
+      // Two people were on the recording -- show the one who spoke the most, since that's
+      // usually the candidate answering questions. (The interviewer view lets a human pick
+      // explicitly; this page keeps it simple since it's the candidate's own feedback.)
+      const longest = [...session.speakers].sort((a, b) => b.total_speech_seconds - a.total_speech_seconds)[0];
+      await loadResultIntoView(longest);
+      return;
+    }
+
+    await loadResultIntoView(session);
+  }
+
+  autoLoadFromSession();
+
+  // --- Record directly on this page (mic + camera only -- this is the candidate's own
+  // solo practice recording, not a two-person call, so no source picker or diarization) ---
+  const recPreview = document.getElementById('recPreview');
+  const recTimer = document.getElementById('recTimer');
+  const recStartBtn = document.getElementById('recStartBtn');
+  const recStopBtn = document.getElementById('recStopBtn');
+  const recStatus = document.getElementById('recStatus');
+
+  let recMediaRecorder, recChunks = [], recStream, recTimerInterval, recStartTime;
+
+  function recFormatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+
+  async function recStart() {
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (err) {
+      recStatus.className = 'error';
+      recStatus.textContent = 'Could not access camera/microphone: ' + err.message;
+      return;
+    }
+
+    recPreview.srcObject = recStream;
+    recChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    recMediaRecorder = new MediaRecorder(recStream, { mimeType });
+    recMediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recChunks.push(e.data); };
+
+    recMediaRecorder.onstop = async () => {
+      const blob = new Blob(recChunks, { type: mimeType });
+      recStream.getTracks().forEach(t => t.stop());
+      await recProcess(blob, mimeType);
+    };
+
+    recMediaRecorder.start();
+    recStartTime = Date.now();
+    recTimerInterval = setInterval(() => { recTimer.textContent = recFormatTime(Date.now() - recStartTime); }, 200);
+
+    recStartBtn.disabled = true;
+    recStopBtn.disabled = false;
+    recStatus.className = '';
+    recStatus.textContent = 'Recording…';
+  }
+
+  function recStop() {
+    recMediaRecorder.stop();
+    clearInterval(recTimerInterval);
+    recStartBtn.disabled = false;
+    recStopBtn.disabled = true;
+  }
+
+  async function recProcess(blob, mimeType) {
+    const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+    recStatus.className = 'processing';
+    recStatus.innerHTML = `<span class="recSpinner"></span>Recording ready (${sizeMB} MB). Transcribing and measuring — this can take up to a minute...`;
+
+    try {
+      const resp = await fetch('/api/process?diarize=0', {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType.split(';')[0] },
+        body: blob,
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const result = await resp.json();
+
+      recStatus.className = '';
+      recStatus.textContent = 'Done — your feedback is below.';
+      await loadResultIntoView(result);
+      document.getElementById('headline')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      recStatus.className = 'error';
+      recStatus.textContent = 'Could not process the recording (is report/server.py running?): ' + err.message;
+    }
+  }
+
+  recStartBtn.addEventListener('click', recStart);
+  recStopBtn.addEventListener('click', recStop);
+</script>
+</body>
+</html>

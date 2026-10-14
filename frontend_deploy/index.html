@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>InterviewSense</title>
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --ink: #e8eaed; --quiet: #9aa3b2; --accent: #4f8cff; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--ink);
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px;
+  }
+  .wrap { max-width: 680px; width: 100%; text-align: center; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  p.sub { color: var(--quiet); margin: 0 0 32px; font-size: 14px; }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .card {
+    flex: 1; min-width: 220px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 26px 18px; text-decoration: none; color: var(--ink); transition: border-color 0.15s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .icon { font-size: 30px; margin-bottom: 10px; }
+  .card .title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .card .desc { font-size: 12px; color: var(--quiet); line-height: 1.5; }
+  .note { margin-top: 28px; font-size: 12px; color: var(--quiet); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>InterviewSense</h1>
+  <p class="sub">Record an interview, then review it as interviewer or candidate.</p>
+  <div class="cards">
+    <a class="card" href="capture/index.html">
+      <div class="icon">🎥</div>
+      <div class="title">1. Capture</div>
+      <div class="desc">Record the interview and download the file.</div>
+    </a>
+    <a class="card" href="report/index.html">
+      <div class="icon">📊</div>
+      <div class="title">2. Report</div>
+      <div class="desc">Pick interviewer or interviewee view for a processed recording.</div>
+    </a>
+  </div>
+  <p class="note">This deployment is the frontend only. Transcript/metrics generation (<code>run_pipeline.py</code>) and the live prediction API still run locally — the report pages will show raw metrics once you load a processed recording's files, but the "measured + predicted" model panel needs the local API server to be running.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>InterviewSense — Capture</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #111; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 32px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: #999; margin-top: 0; margin-bottom: 24px; }
+  video { width: 480px; max-width: 90vw; background: #000; border-radius: 8px; margin-bottom: 16px; }
+  .controls { display: flex; gap: 12px; margin-bottom: 16px; }
+  button { font-size: 15px; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+  #startBtn { background: #2f7; color: #063; }
+  #stopBtn { background: #e55; color: #fff; }
+  #downloadBtn { background: #37f; color: #fff; text-decoration: none; display: inline-block; }
+  button:disabled, a.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  #status { margin-top: 8px; color: #9c9; min-height: 20px; }
+  #timer { font-size: 28px; font-variant-numeric: tabular-nums; margin: 8px 0; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid #9c9; border-top-color: transparent;
+    border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status.processing { color: #ea4; }
+  #status.error { color: #e66; }
+  .sources { display: flex; gap: 12px; margin-bottom: 16px; }
+  .sources button { background: #223; color: #eee; border: 1px solid #335; }
+  .sources button.selected { background: #37f; border-color: #37f; }
+  .option { font-size: 13px; color: #aaa; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .option input { width: 16px; height: 16px; }
+</style>
+</head>
+<body>
+  <h1>InterviewSense — Capture</h1>
+  <p class="sub">Part 1: record the interview, then hand the file to Part 2 (transcript) and Part 3 (metrics).</p>
+
+  <div class="sources">
+    <button id="micSourceBtn" class="selected" data-mode="mic">🎙️ Record Myself (mic + camera)</button>
+    <button id="tabSourceBtn" data-mode="tab">🖥️ Record Meeting Tab (screen + audio)</button>
+  </div>
+  <div class="option">
+    <input type="checkbox" id="diarizeCheckbox">
+    <label for="diarizeCheckbox">This recording has two speakers (interviewer + candidate) — separate them automatically</label>
+  </div>
+
+  <video id="preview" autoplay muted playsinline></video>
+  <div id="timer">00:00</div>
+
+  <div class="controls">
+    <button id="startBtn">● Start Recording</button>
+    <button id="stopBtn" disabled>■ Stop</button>
+    <a id="downloadBtn" class="disabled" download="interview_recording.webm">⬇ Download Recording</a>
+  </div>
+
+  <div id="status">Click "Start Recording" and allow camera/microphone access.</div>
+
+<script>
+  const preview = document.getElementById('preview');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const statusEl = document.getElementById('status');
+  const timerEl = document.getElementById('timer');
+  const micSourceBtn = document.getElementById('micSourceBtn');
+  const tabSourceBtn = document.getElementById('tabSourceBtn');
+  const diarizeCheckbox = document.getElementById('diarizeCheckbox');
+
+  let mediaRecorder;
+  let chunks = [];
+  let stream;
+  let timerInterval;
+  let startTime;
+  let sourceMode = 'mic';
+
+  function selectSource(mode) {
+    sourceMode = mode;
+    micSourceBtn.classList.toggle('selected', mode === 'mic');
+    tabSourceBtn.classList.toggle('selected', mode === 'tab');
+    // A remote meeting tab is the realistic two-speaker case; default the checkbox
+    // accordingly, but the interviewer can still override either way.
+    diarizeCheckbox.checked = (mode === 'tab');
+  }
+  micSourceBtn.addEventListener('click', () => selectSource('mic'));
+  tabSourceBtn.addEventListener('click', () => selectSource('tab'));
+
+  function formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+
+  async function startRecording() {
+    try {
+      if (sourceMode === 'tab') {
+        // Captures a shared browser tab/window/screen, including that source's audio --
+        // this is how a remote meeting (Zoom/Meet/Teams open in another tab) gets recorded,
+        // since getUserMedia only ever sees this device's own mic/camera.
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      }
+    } catch (err) {
+      const sourceLabel = sourceMode === 'tab' ? 'screen/tab share' : 'camera/microphone';
+      statusEl.textContent = `Could not access ${sourceLabel}: ` + err.message;
+      return;
+    }
+
+    if (sourceMode === 'tab' && stream.getAudioTracks().length === 0) {
+      statusEl.textContent = 'No audio track was shared — when the picker opens, make sure to check "Share tab audio" (or your OS equivalent), then try again.';
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+
+    preview.srcObject = stream;
+    chunks = [];
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : 'video/webm';
+
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      downloadBtn.href = url;
+      downloadBtn.classList.remove('disabled');
+      stream.getTracks().forEach(t => t.stop());
+
+      await processRecording(blob, mimeType);
+    };
+
+    // If the user clicks the browser's own native "Stop sharing" control (tab-share mode),
+    // the video track ends on its own -- treat that the same as pressing our Stop button.
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+    });
+
+    mediaRecorder.start();
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+      timerEl.textContent = formatTime(Date.now() - startTime);
+    }, 200);
+
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    micSourceBtn.disabled = true;
+    tabSourceBtn.disabled = true;
+    downloadBtn.classList.add('disabled');
+    statusEl.textContent = 'Recording…';
+  }
+
+  function stopRecording() {
+    mediaRecorder.stop();
+    clearInterval(timerInterval);
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    micSourceBtn.disabled = false;
+    tabSourceBtn.disabled = false;
+  }
+
+  async function processRecording(blob, mimeType) {
+    const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+    statusEl.className = 'processing';
+    statusEl.innerHTML = `<span class="spinner"></span>Recording ready (${sizeMB} MB). Transcribing and measuring automatically — this can take up to a minute...`;
+
+    const diarize = diarizeCheckbox.checked;
+    if (diarize) {
+      statusEl.innerHTML = `<span class="spinner"></span>Recording ready (${sizeMB} MB). Separating speakers, transcribing, and measuring — this can take a couple minutes...`;
+    }
+
+    try {
+      const resp = await fetch(`/api/process?diarize=${diarize ? '1' : '0'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType.split(';')[0] },
+        body: blob,
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const result = await resp.json();
+
+      sessionStorage.setItem('interviewsense_session', JSON.stringify(result));
+      statusEl.className = '';
+      statusEl.textContent = 'Done. Opening your report...';
+      window.location.href = '/report/interviewer.html';
+    } catch (err) {
+      statusEl.className = 'error';
+      statusEl.textContent = 'Could not auto-process (is report/server.py running?): ' + err.message +
+        ' — you can still use "Download Recording" and run the pipeline manually.';
+    }
+  }
+
+  startBtn.addEventListener('click', startRecording);
+  stopBtn.addEventListener('click', stopRecording);
+</script>
+</body>
+</html>

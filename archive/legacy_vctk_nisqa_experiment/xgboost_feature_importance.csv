@@ -1,0 +1,17 @@
+feature,importance,rank
+voiced_frame_ratio,0.10968755,1
+pitch_mean,0.105017036,2
+pitch_range,0.10473536,3
+pitch_median,0.10179149,4
+rms_mean,0.10157315,5
+pitch_std,0.10150423,6
+rms_std,0.09896963,7
+speaking_rate_wpm,0.09380657,8
+speaking_rate_wpm_squared,0.09335596,9
+word_count,0.08955901,10
+speech_ratio,0.0,13
+pause_count,0.0,13
+speech_duration_sec,0.0,13
+max_pause_duration,0.0,13
+avg_pause_duration,0.0,13
+silence_duration,0.0,13

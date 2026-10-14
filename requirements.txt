@@ -1,0 +1,22 @@
+# Core pipeline (capture -> transcript -> metrics -> predict -> report)
+numpy
+scipy
+scikit-learn
+librosa
+soundfile
+joblib
+faster-whisper
+noisereduce
+
+# Training / notebooks (Phase2-5, training/*.py) -- not required to run the live app,
+# only to re-extract features, retrain models, or re-run the .ipynb notebooks
+pandas
+pyarrow
+xgboost
+torch
+transformers
+matplotlib
+seaborn
+tqdm
+jupyter
+ipykernel
