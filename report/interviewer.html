@@ -161,8 +161,9 @@
   </section>
 
   <section>
-    <h2>Confidence: how confident does this speech sound</h2>
-    <div class="empty" id="confidenceEmpty">Record or load a recording to see a confidence read.</div>
+    <h2>Acoustic delivery style (not a validated confidence score)</h2>
+    <p style="font-size:13px; color:var(--quiet); margin-top:-8px;">Trustworthy-sounding vs. neutral delivery, from a model trained on acted/scripted speech &mdash; not checked against anyone's actual rated confidence, interview or otherwise. See the note below before treating this as a judgment of the candidate.</p>
+    <div class="empty" id="confidenceEmpty">Record or load a recording to see this read.</div>
     <div id="confidenceBody" style="display:none;">
       <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:10px;">
         <div id="confidenceLabel" style="font-size:32px; font-weight:700;"></div>
@@ -171,6 +172,7 @@
       <div style="background:var(--border); height:10px; border-radius:6px; overflow:hidden; margin-bottom:10px;">
         <div id="confidenceBar" style="height:100%; background:#4f8cff; width:0%;"></div>
       </div>
+      <div id="confidenceExtrapolation" style="font-size:13px; color:#e5a93a; margin-bottom:10px; display:none;"></div>
       <div style="font-size:12px; color:var(--quiet); border-top:1px solid var(--border); padding-top:10px;" id="confidenceCaveat"></div>
     </div>
   </section>
@@ -220,7 +222,11 @@
 </div>
 
 <script>
-  const FILLER_WORDS = new Set(["um", "uh", "uhm", "er", "erm", "like"]);
+  // Fallback only, used when a transcript is loaded standalone (no metrics.json available
+  // yet to read the real list from). Whenever metrics ARE available, renderTranscript uses
+  // metrics.filler_word_list instead -- compute_metrics.py's actual definition -- so the
+  // highlighted words can't silently drift from what fillers_per_100_words actually counted.
+  const FALLBACK_FILLER_WORDS = ["um", "uh", "uhm", "er", "erm", "like", "you know"];
   let lastAudioName = '', lastMetrics = null, lastTranscript = null;
 
   // --- Waveform + audio playback ---
@@ -284,16 +290,25 @@
   const transcriptText = document.getElementById('transcriptText');
   const transcriptEmpty = document.getElementById('transcriptEmpty');
 
-  function renderTranscript(data, name) {
+  function renderTranscript(data, name, fillerWordList) {
     if (name) transcriptName.textContent = name;
     lastTranscript = data;
     const rawText = data.text || '';
-    const withPhraseMarks = rawText.replace(/\b(you\s+know)\b/gi, '<mark>$1</mark>');
+
+    const list = (fillerWordList && fillerWordList.length) ? fillerWordList : FALLBACK_FILLER_WORDS;
+    const phrases = list.filter(f => f.includes(' '));
+    const singleWords = new Set(list.filter(f => !f.includes(' ')));
+
+    let withPhraseMarks = rawText;
+    for (const phrase of phrases) {
+      const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      withPhraseMarks = withPhraseMarks.replace(new RegExp(`\\b(${escaped})\\b`, 'gi'), '<mark>$1</mark>');
+    }
     const parts = withPhraseMarks.split(/(<mark>.*?<\/mark>|\s+)/).filter(Boolean);
     const highlighted = parts.map(part => {
       if (part.startsWith('<mark>') || /^\s+$/.test(part)) return part;
       const clean = part.toLowerCase().replace(/[^a-z']/g, '');
-      return FILLER_WORDS.has(clean) ? `<mark>${part}</mark>` : part;
+      return singleWords.has(clean) ? `<mark>${part}</mark>` : part;
     }).join('');
 
     transcriptText.innerHTML = highlighted || '(empty transcript)';
@@ -311,7 +326,7 @@
       transcriptEmpty.textContent = 'Could not parse transcript.json: ' + err.message;
       return;
     }
-    renderTranscript(data, file.name);
+    renderTranscript(data, file.name, lastMetrics?.filler_word_list);
   });
 
   // --- Metrics ---
@@ -355,6 +370,10 @@
   function renderMetrics(data, name) {
     if (name) metricsName.textContent = name;
     lastMetrics = data;
+    // Metrics and transcript can be loaded in either order via the manual file pickers --
+    // if a transcript is already showing, re-highlight it with this metrics.json's real
+    // filler-word list instead of leaving it on the fallback list.
+    if (lastTranscript) renderTranscript(lastTranscript, null, data.filler_word_list);
     statGrid.innerHTML = STAT_CARDS.filter(c => data[c.key] !== undefined && data[c.key] !== null).map(c => `
       <div class="stat">
         <div class="n">${c.fmt(data[c.key])}</div>
@@ -408,6 +427,7 @@
   const confidenceScore = document.getElementById('confidenceScore');
   const confidenceBar = document.getElementById('confidenceBar');
   const confidenceCaveat = document.getElementById('confidenceCaveat');
+  const confidenceExtrapolation = document.getElementById('confidenceExtrapolation');
 
   function renderConfidenceSection(confidence) {
     if (!confidence || confidence.error) {
@@ -417,10 +437,16 @@
       return;
     }
     const pct = Math.round(confidence.confidence_probability * 100);
-    confidenceLabel.textContent = confidence.label === 'trustworthy' ? 'Confident-sounding' : 'Neutral-sounding';
-    confidenceScore.textContent = `${pct}% confident-sounding (predicted)`;
+    confidenceLabel.textContent = confidence.label === 'trustworthy' ? 'Trustworthy-sounding' : 'Neutral-sounding';
+    confidenceScore.textContent = `${pct}% trustworthy-sounding delivery (predicted, not a confidence rating)`;
     confidenceBar.style.width = `${pct}%`;
     confidenceBar.style.background = confidence.label === 'trustworthy' ? '#3ac17a' : '#4f8cff';
+    if (confidence.extrapolation_warning) {
+      confidenceExtrapolation.textContent = `⚠ This recording's acoustic features are far outside the model's training data (z-score ${confidence.max_feature_zscore}) -- treat this reading as unreliable.`;
+      confidenceExtrapolation.style.display = 'block';
+    } else {
+      confidenceExtrapolation.style.display = 'none';
+    }
     confidenceCaveat.textContent = confidence.model_caveat || '';
     confidenceEmpty.style.display = 'none';
     confidenceBody.style.display = 'block';
@@ -440,6 +466,9 @@
       return;
     }
     const m = result.measured, p = result.predicted;
+    const fluencyFlag = p.extrapolation_warning
+      ? ` <span style="color:#e5a93a;">⚠ unreliable — this recording's features are far outside the training data (raw model output: ${p.fluency_score_raw})</span>`
+      : '';
     predictionGrid.innerHTML = `
       <div class="stat"><div class="n">${Math.round(m.wpm_speech_duration)}</div><div class="l">WPM (measured)</div></div>
       <div class="stat"><div class="n">${m.pause_count}</div><div class="l">Pauses (measured)</div></div>
@@ -447,8 +476,9 @@
       <div class="stat"><div class="n">${p.fluency_score}</div><div class="l">Fluency /10 (predicted)</div></div>
       <div class="stat"><div class="n">${p.communication_level}</div><div class="l">Level (${Math.round(p.communication_level_confidence*100)}% conf., predicted)</div></div>
     `;
-    predictionTop.textContent = 'Top contributing features to the prediction: ' +
-      p.top_contributing_features.map(f => `${f.feature} (${f.contribution > 0 ? '+' : ''}${f.contribution})`).join(', ');
+    predictionTop.innerHTML = 'Top contributing features to the prediction: ' +
+      p.top_contributing_features.map(f => `${f.feature} (${f.contribution > 0 ? '+' : ''}${f.contribution})`).join(', ') +
+      fluencyFlag;
     predictionCaveat.textContent = result.model_caveat;
     predictionEmpty.style.display = 'none';
     predictionBody.style.display = 'block';
@@ -534,8 +564,8 @@
         waveformEmpty.textContent = 'Could not load the audio: ' + err.message;
       }
     }
-    if (result.transcript) renderTranscript(result.transcript, 'transcript.json (auto)');
     if (result.metrics) renderMetrics(result.metrics, 'metrics.json (auto)');
+    if (result.transcript) renderTranscript(result.transcript, 'transcript.json (auto)', result.metrics?.filler_word_list);
     if (result.prediction) renderPrediction(result.prediction);
   }
 

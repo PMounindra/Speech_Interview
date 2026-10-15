@@ -98,7 +98,8 @@
   </div>
 
   <div class="headline" id="confidenceSection">
-    <div class="big" style="font-size:14px; color:var(--quiet); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px;">How confident did you sound?</div>
+    <div class="big" style="font-size:14px; color:var(--quiet); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">Acoustic delivery style</div>
+    <div class="sub2" style="margin-bottom:10px;">Not a validated confidence score &mdash; see the note below.</div>
     <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:10px;">
       <div id="confidenceLabel" style="font-size:26px; font-weight:700;"></div>
       <div id="confidenceScore" style="font-size:14px; color:var(--quiet);"></div>
@@ -106,6 +107,7 @@
     <div style="background:var(--border); height:8px; border-radius:5px; overflow:hidden; margin-bottom:10px;">
       <div id="confidenceBar" style="height:100%; background:var(--accent); width:0%;"></div>
     </div>
+    <div id="confidenceExtrapolation" style="font-size:13px; color:var(--warn); margin-bottom:10px; display:none;"></div>
     <div class="sub2" id="confidenceCaveat"></div>
   </div>
 
@@ -134,6 +136,7 @@
   const confidenceScore = document.getElementById('confidenceScore');
   const confidenceBar = document.getElementById('confidenceBar');
   const confidenceCaveat = document.getElementById('confidenceCaveat');
+  const confidenceExtrapolation = document.getElementById('confidenceExtrapolation');
 
   function renderConfidenceCard(confidence) {
     if (!confidence || confidence.error) {
@@ -141,10 +144,16 @@
       return;
     }
     const pct = Math.round(confidence.confidence_probability * 100);
-    confidenceLabel.textContent = confidence.label === 'trustworthy' ? 'Confident-sounding' : 'Neutral-sounding';
-    confidenceScore.textContent = `${pct}% confident-sounding (predicted)`;
+    confidenceLabel.textContent = confidence.label === 'trustworthy' ? 'Trustworthy-sounding' : 'Neutral-sounding';
+    confidenceScore.textContent = `${pct}% trustworthy-sounding delivery (predicted)`;
     confidenceBar.style.width = `${pct}%`;
     confidenceBar.style.background = confidence.label === 'trustworthy' ? 'var(--good)' : 'var(--accent)';
+    if (confidence.extrapolation_warning) {
+      confidenceExtrapolation.textContent = `⚠ This recording's features are far outside the model's training data (z-score ${confidence.max_feature_zscore}) -- treat this reading as unreliable.`;
+      confidenceExtrapolation.style.display = 'block';
+    } else {
+      confidenceExtrapolation.style.display = 'none';
+    }
     confidenceCaveat.textContent = confidence.model_caveat || '';
     confidenceSection.style.display = 'block';
   }

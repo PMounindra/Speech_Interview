@@ -80,6 +80,16 @@ def test_filler_features_empty_text_safe():
     assert out["fillers_per_100_words"] == 0.0
 
 
+def test_filler_features_exposes_the_word_list_it_actually_counted():
+    # The frontend transcript highlighter reads this instead of keeping its own separate,
+    # independently-editable copy that could silently drift from what's actually counted.
+    out = filler_features("um, this is like, you know, a test")
+    assert "filler_word_list" in out
+    assert "um" in out["filler_word_list"]
+    assert "like" in out["filler_word_list"]
+    assert "you know" in out["filler_word_list"]
+
+
 # ---------------------------------------------------------------------------
 # safe_stats
 # ---------------------------------------------------------------------------

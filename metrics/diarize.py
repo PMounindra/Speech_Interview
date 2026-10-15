@@ -129,17 +129,36 @@ def diarize(audio_path: str, method: str = "auto"):
 
 
 def write_speaker_tracks(y: np.ndarray, sr: int, segments_with_speaker, out_dir: Path):
-    """Concatenates each speaker's segments (in original order, with their original gaps
-    collapsed) into its own wav file, so downstream metrics see only that speaker's speech
-    and pauses between their own turns -- not silence while the other person was talking."""
+    """Builds each speaker's track at full original length, placing their speech at its
+    original timestamps and silence everywhere else (their own in-turn pauses AND the time
+    the other speaker was talking), instead of concatenating only their speech segments.
+
+    This was previously done by concatenation, which collapsed every gap -- including the
+    real pauses *between this speaker's own segments* -- so downstream VAD-based pause
+    detection on the reconstructed track saw abutted speech and reported near-zero pauses
+    for every diarized recording, regardless of how the speaker actually paused. Preserving
+    original timestamps (silence instead of removal) fixes that: a true mid-turn pause
+    still shows up as silence in this speaker's own track and is measured correctly.
+
+    Tradeoff, by design: time spent while the OTHER speaker was talking now also appears as
+    silence in this speaker's track, so pause_ratio/pause_count on a diarized track reflects
+    "gaps in this speaker's own turn-taking" (including listening time), not only mid-sentence
+    hesitation. That is the semantically correct reading of "pause" for a two-person
+    recording -- the alternative (collapsing turns) actively discards real pause information
+    for the sake of a narrower pause_ratio number.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
+    total_len = len(y)
     paths = {}
     for speaker in (0, 1):
-        clips = [y[int(s["start_sec"] * sr):int(s["end_sec"] * sr)]
-                 for s in segments_with_speaker if s["speaker"] == speaker]
-        if not clips:
+        speaker_segments = [s for s in segments_with_speaker if s["speaker"] == speaker]
+        if not speaker_segments:
             continue
-        track = np.concatenate(clips)
+        track = np.zeros(total_len, dtype=y.dtype)
+        for s in speaker_segments:
+            start_sample = int(s["start_sec"] * sr)
+            end_sample = int(s["end_sec"] * sr)
+            track[start_sample:end_sample] = y[start_sample:end_sample]
         path = out_dir / f"speaker_{speaker}.wav"
         sf.write(str(path), track, sr)
         paths[speaker] = path

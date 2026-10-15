@@ -45,7 +45,24 @@ def predict(metrics: dict) -> dict:
     x = np.array([[metrics[c] for c in feature_cols]])
     x_s = en_bundle["scaler"].transform(x)
 
-    fluency_pred = float(en_bundle["model"].predict(x_s)[0])
+    fluency_pred_raw = float(en_bundle["model"].predict(x_s)[0])
+    # ElasticNet is linear and has no built-in bound: on a recording whose features fall far
+    # outside Speechocean762's training distribution, it extrapolates past the 1-10 scale the
+    # label itself is defined on (observed in practice: -12.58 and 11.62 on real recordings
+    # with unusual WPM/feature combinations). The *raw* prediction is kept for transparency,
+    # but the displayed score is clamped to the scale it was trained to predict, and an
+    # explicit flag says when that clamp fired so this isn't silently presented as business
+    # as usual -- a clamped score means "outside what this model was trained to judge," not
+    # a confident 1 or 10.
+    FLUENCY_SCALE_MIN, FLUENCY_SCALE_MAX = 1.0, 10.0
+    fluency_pred = max(FLUENCY_SCALE_MIN, min(FLUENCY_SCALE_MAX, fluency_pred_raw))
+    out_of_domain = abs(fluency_pred_raw - fluency_pred) > 1e-9
+    # Independent extrapolation signal: how far this recording's own standardized features
+    # sit from the training data's mean (in standard deviations), regardless of whether the
+    # clamp above fired. A high value means "this recording doesn't look like training data,"
+    # which is useful even for in-range predictions.
+    max_abs_zscore = float(np.max(np.abs(x_s[0])))
+
     class_idx = int(lr_bundle["model"].predict(x_s)[0])
     class_probs = lr_bundle["model"].predict_proba(x_s)[0]
 
@@ -73,7 +90,15 @@ def predict(metrics: dict) -> dict:
         # Predicted by the trained model, not measured directly.
         "predicted": {
             "fluency_score": round(fluency_pred, 2),
+            "fluency_score_raw": round(fluency_pred_raw, 2),
             "fluency_score_scale": "1-10 (Speechocean762 expert-rated scale)",
+            "fluency_score_clamped": out_of_domain,
+            "max_feature_zscore": round(max_abs_zscore, 2),
+            # 4 standard deviations from the training data's own feature means is already a
+            # generous margin (training data itself mostly falls within ~3) -- past that, this
+            # recording's features don't resemble anything the model was trained on, so the
+            # prediction should be read as unreliable regardless of whether it also got clamped.
+            "extrapolation_warning": max_abs_zscore > 4.0,
             "communication_level": lr_bundle["classes"][class_idx],
             "communication_level_confidence": round(float(class_probs[class_idx]), 3),
             "top_contributing_features": [

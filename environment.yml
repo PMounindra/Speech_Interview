@@ -27,3 +27,4 @@ dependencies:
       - torch
       - transformers
       - pyarrow
+      - praat-parselmouth

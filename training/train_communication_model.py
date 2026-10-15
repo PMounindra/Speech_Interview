@@ -95,33 +95,55 @@ def fluency_to_class(y):
     return np.where(y <= 6, 0, np.where(y <= 8, 1, 2))
 
 
+def make_elasticnet_cv(groups_for_fit: np.ndarray, n_inner_folds: int = 5) -> ElasticNetCV:
+    """ElasticNetCV does its own internal CV to pick alpha/l1_ratio -- passing a bare
+    `cv=5` (the previous behavior) uses plain KFold for that inner search, which can put
+    a speaker's multiple utterances in both the inner-train and inner-validation split
+    even when the *outer* evaluation fold (GroupKFold, in run_cv below) is correctly
+    speaker-independent. That leaks speaker identity into hyperparameter selection, just
+    one level down from the final held-out test. Precomputing the inner splits with
+    GroupKFold on the same `groups_for_fit` the model is about to be trained on makes the
+    inner search speaker-independent too.
+    """
+    n_groups = len(np.unique(groups_for_fit))
+    inner_folds = min(n_inner_folds, n_groups)
+    dummy_X = np.zeros((len(groups_for_fit), 1))
+    inner_splits = list(GroupKFold(n_splits=inner_folds).split(dummy_X, groups=groups_for_fit))
+    return ElasticNetCV(l1_ratio=[0.1, 0.35, 0.5, 0.7, 0.9], alphas=np.logspace(-3, 0, 20),
+                         cv=inner_splits, max_iter=10000, random_state=42)
+
+
 REGRESSORS = {
-    "elasticnet": lambda: ElasticNetCV(l1_ratio=[0.1, 0.35, 0.5, 0.7, 0.9], alphas=np.logspace(-3, 0, 20),
-                                        cv=5, max_iter=10000, random_state=42),
     "random_forest": lambda: RandomForestRegressor(n_estimators=300, max_depth=8, random_state=42, n_jobs=-1),
     "gradient_boosting": lambda: GradientBoostingRegressor(n_estimators=200, max_depth=3, learning_rate=0.05, random_state=42),
     "svr": lambda: SVR(kernel="rbf", C=1.0, epsilon=0.2),
     "xgboost": lambda: XGBRegressor(n_estimators=300, max_depth=4, learning_rate=0.05, random_state=42, n_jobs=-1),
 }
+# "elasticnet" is handled separately everywhere (not via REGRESSORS) because, unlike the other
+# four, it needs the current fold's/fit's own `groups` array to build a speaker-grouped inner
+# CV (see make_elasticnet_cv) -- it can't be a zero-argument factory like the rest.
+ALL_REGRESSOR_NAMES = ["elasticnet"] + list(REGRESSORS)
 
 
 def run_cv(X, y, groups, n_folds):
     gkf = GroupKFold(n_splits=n_folds)
 
-    reg_scores = {name: {"mae": [], "rmse": [], "r2": [], "pcc": []} for name in REGRESSORS}
+    reg_scores = {name: {"mae": [], "rmse": [], "r2": [], "pcc": []} for name in ALL_REGRESSOR_NAMES}
     y_class = fluency_to_class(y)
     clf_scores = {"accuracy": [], "macro_f1": []}
 
     for fold, (train_idx, test_idx) in enumerate(gkf.split(X, y, groups), 1):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
+        groups_train = groups[train_idx]
 
         scaler = StandardScaler().fit(X_train)
         X_train_s = scaler.transform(X_train)
         X_test_s = scaler.transform(X_test)
 
         fold_line = [f"Fold {fold}/{n_folds}:"]
-        for name, make_model in REGRESSORS.items():
+        fold_models = {"elasticnet": lambda gt=groups_train: make_elasticnet_cv(gt), **REGRESSORS}
+        for name, make_model in fold_models.items():
             model = make_model()
             model.fit(X_train_s, y_train)
             pred = model.predict(X_test_s)
@@ -197,12 +219,12 @@ def main():
         "feature_columns": feature_cols,
         "literature_benchmarks": LITERATURE_BENCHMARKS,
     }
-    for name in REGRESSORS:
+    for name in ALL_REGRESSOR_NAMES:
         results.update(summarize(name, reg_scores[name]))
     results.update(summarize("logreg", clf_scores))
 
     print("\n=== Cross-validated results (mean +/- std across folds) ===")
-    for name in REGRESSORS:
+    for name in ALL_REGRESSOR_NAMES:
         print(f"{name:18s} MAE={results[f'{name}_mae_mean']:.3f}+/-{results[f'{name}_mae_std']:.3f}  "
               f"RMSE={results[f'{name}_rmse_mean']:.3f}+/-{results[f'{name}_rmse_std']:.3f}  "
               f"R2={results[f'{name}_r2_mean']:.3f}+/-{results[f'{name}_r2_std']:.3f}  "
@@ -213,7 +235,7 @@ def main():
     print("\n=== Published benchmarks on this dataset's fluency task (deep embeddings, for reference) ===")
     for b in LITERATURE_BENCHMARKS:
         print(f"  {b['source']:45s} {b['metric']:12s} {b['value']:.3f}")
-    best_pcc = max(results[f"{name}_pcc_mean"] for name in REGRESSORS)
+    best_pcc = max(results[f"{name}_pcc_mean"] for name in ALL_REGRESSOR_NAMES)
     print(f"  {'Our best (handcrafted features)':45s} {'fluency PCC':12s} {best_pcc:.3f}")
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -227,7 +249,7 @@ def main():
     scaler = StandardScaler().fit(X)
     X_s = scaler.transform(X)
 
-    en_final = REGRESSORS["elasticnet"]().fit(X_s, y)
+    en_final = make_elasticnet_cv(groups).fit(X_s, y)
     rf_final = REGRESSORS["random_forest"]().fit(X_s, y)
     lr_final = LogisticRegression(max_iter=2000, C=1.0).fit(X_s, fluency_to_class(y))
 

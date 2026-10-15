@@ -210,7 +210,10 @@ class Handler(SimpleHTTPRequestHandler):
         except FileNotFoundError:
             prediction["confidence"] = {"error": "confidence model not trained yet"}
         except Exception as e:
-            prediction["confidence"] = {"error": f"confidence extraction failed: {e!r}"}
+            # Log the real exception (may contain local paths/stack detail) server-side only --
+            # same policy as _send_error_json's generic client-facing messages.
+            print(f"[error] confidence extraction failed for {audio_path}: {e!r}", file=sys.stderr)
+            prediction["confidence"] = {"error": "confidence extraction failed on the server"}
 
         return transcript, metrics, prediction
 

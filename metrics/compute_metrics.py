@@ -106,6 +106,11 @@ def filler_features(text):
         "total_filler_count": total,
         "fillers_per_100_words": 100 * total / n if n else 0.0,
         "strict_fillers_per_100_words": 100 * strict / n if n else 0.0,
+        # The actual word/phrase list this function counts against, exposed so callers (the
+        # frontend transcript highlighter in particular) can match this function's real
+        # definition of "filler" instead of maintaining their own separate, independently
+        # editable copy that can silently drift from this one.
+        "filler_word_list": sorted(STRICT_FILLERS) + ["like", "you know"],
     }
 
 

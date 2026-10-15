@@ -118,10 +118,20 @@ def predict_confidence(wav_path: str = None, features: dict = None) -> dict:
 
     class_idx = int(bundle["model"].predict(x_s)[0])
     proba = bundle["model"].predict_proba(x_s)[0]
+    # Same domain-mismatch signal as predict_fluency.py: how far this recording's features
+    # sit from the TIS Corpus's own training distribution. A real interview recording is a
+    # different domain from TIS's short acted/scripted sentences, so this matters even more
+    # here than for the fluency model.
+    max_abs_zscore = float(np.max(np.abs(x_s[0])))
 
     return {
         "label": bundle["classes"][class_idx],
         "confidence_probability": round(float(proba[1]), 3),
+        "max_feature_zscore": round(max_abs_zscore, 2),
+        "extrapolation_warning": max_abs_zscore > 4.0,
+        # Explicit, not just prose: this output has never been checked against a human rating
+        # of how confident anyone sounded, on any recording, interview or otherwise.
+        "is_validated_interview_confidence": False,
         "model_caveat": (
             "Trained on the TIS Corpus (CC BY 4.0): speakers' own self-produced attempt at "
             "sounding trustworthy/confident vs. their natural voice, read from short scripted "
