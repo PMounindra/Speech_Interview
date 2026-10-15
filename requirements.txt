@@ -7,6 +7,7 @@ soundfile
 joblib
 faster-whisper
 noisereduce
+praat-parselmouth  # metrics/confidence_features.py (confidence classifier's acoustic features)
 resemblyzer  # preferred diarization embedding in metrics/diarize.py; falls back to an
              # MFCC+KMeans method if this isn't installed
 

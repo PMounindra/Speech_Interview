@@ -1,0 +1,66 @@
+{
+  "dataset": "Trustworthy Intent in Speech (TIS) Corpus, CC BY 4.0, OSF 10.17605/OSF.IO/45D8J",
+  "n_utterances": 1152,
+  "n_speakers": 96,
+  "n_folds": 5,
+  "input_features": [
+    "Voice_Duration",
+    "Mean_Pitch(F0)",
+    "StDev_Pitch(F0)",
+    "Pitch_Min_(F0)_(Praat_To_Pitch_(ac))",
+    "Pitch_Max_(F0)_(Praat_To_Pitch_(ac))",
+    "Harmonics-to-Noise_Ratio",
+    "Local_Jitter",
+    "Local_Absolute_Jitter",
+    "RAP_Jitter",
+    "ppq5_Jitter",
+    "ddp_Jitter",
+    "local_shimmer",
+    "localdb_shimmer",
+    "apq3_shimmer",
+    "aqpq5_shimmer",
+    "apq11_shimmer",
+    "dda_shimmer",
+    "F1_Mean",
+    "F2_Mean",
+    "F3_Mean",
+    "F4_Mean",
+    "Mean_Intensity(dB)"
+  ],
+  "label": "Speaker_Intent (Neutral=0, Trustworthy=1) -- self-produced intent, not a third-party rated confidence score",
+  "cv": {
+    "logistic_regression_accuracy_mean": 0.7244736842105264,
+    "logistic_regression_precision_mean": 0.7449895074515838,
+    "logistic_regression_recall_mean": 0.6863157894736842,
+    "logistic_regression_f1_mean": 0.7131164878192244,
+    "logistic_regression_auc_mean": 0.7981958679593721,
+    "random_forest_accuracy_mean": 0.711798245614035,
+    "random_forest_precision_mean": 0.7267861133742844,
+    "random_forest_recall_mean": 0.6899122807017544,
+    "random_forest_f1_mean": 0.7004798875489269,
+    "random_forest_auc_mean": 0.7827424207448447,
+    "gradient_boosting_accuracy_mean": 0.7026315789473684,
+    "gradient_boosting_precision_mean": 0.7127667002147932,
+    "gradient_boosting_recall_mean": 0.6850877192982456,
+    "gradient_boosting_f1_mean": 0.6942007892063643,
+    "gradient_boosting_auc_mean": 0.7751606263465682
+  },
+  "deployed_model": "logistic_regression",
+  "published_baseline": {
+    "source": "Maltezou-Papastylianou, Scherer & Paulmann, Sci Data 2025, overall LOSO-CV results",
+    "random_forest": {
+      "accuracy": 0.71,
+      "precision": 0.73,
+      "recall": 0.68,
+      "f1": 0.7,
+      "auc": 0.77
+    },
+    "logistic_regression": {
+      "accuracy": 0.69,
+      "precision": 0.71,
+      "recall": 0.66,
+      "f1": 0.68,
+      "auc": 0.76
+    }
+  }
+}

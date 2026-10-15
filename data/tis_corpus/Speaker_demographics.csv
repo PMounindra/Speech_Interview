@@ -1,0 +1,97 @@
+Age-group,Speaker_ID,Ethnicity,Age,Sex,Nationality
+Older,1893,White,60,Female,English
+Younger,1896,South Asian,30,Female,Indian 
+Younger,1898,White,43,Male,English
+Younger,1899,South Asian,34,Male,Indian 
+Older,1901,Black,61,Female,British
+Younger,1904,Black,37,Male,British
+Younger,1906,Black,31,Female,British
+Older,1909,White,74,Male,English
+Older,1911,White,75,Male,English
+Older,1912,White,60,Female,English
+Younger,1913,South Asian,27,Male,Indian 
+Older,1914,White,82,Female,English
+Younger,1915,Black,35,Male,British
+Older,1916,White,62,Male,English
+Younger,1917,Black,42,Female,British
+Younger,1918,South Asian,26,Female,Indian 
+Older,1923,White,64,Male,English
+Younger,1924,Black,36,Male,British
+Younger,1925,Black,27,Female,British
+Younger,1926,Black,26,Female,British
+Younger,1927,South Asian,30,Male,Indian 
+Older,1929,White,87,Female,English
+Younger,1931,Black,28,Female,British
+Younger,1932,South Asian,31,Male,Indian 
+Older,1935,White,64,Female,English
+Older,1936,White,66,Male,English
+Older,1941,White,76,Male,English
+Older,1942,White,67,Female,English
+Older,1945,White,60,Male,English
+Younger,1948,South Asian,22,Female,Indian 
+Older,1951,White,74,Female,English
+Younger,1957,Black,22,Female,British
+Younger,1958,Black,25,Female,British
+Older,1959,White,74,Female,English
+Older,1963,White,66,Male,English
+Younger,1965,Black,24,Male,British
+Younger,1968,White,22,Male,English
+Older,1969,White,60,Female,English
+Younger,1970,White,32,Female,English
+Younger,1971,White,36,Female,English
+Younger,1972,White,31,Male,English
+Younger,1973,White,36,Female,English
+Younger,1974,White,25,Male,English
+Younger,1976,Black,25,Male,British
+Older,1977,White,65,Male,English
+Younger,1980,White,44,Female,English
+Younger,1983,White,33,Male,English
+Younger,1984,White,27,Female,English
+Younger,1985,Black,22,Female,British
+Younger,1987,White,29,Male,English
+Younger,1989,White,38,Female,English
+Younger,1991,White,21,Male,English
+Younger,1992,White,23,Female,English
+Younger,1996,Black,30,Male,British
+Younger,1997,White,32,Male,English
+Older,1999,White,62,Male,English
+Younger,2000,White,21,Female,English
+Younger,2001,White,32,Male,English
+Younger,2003,White,29,Male,English
+Younger,2004,White,22,Female,English
+Younger,2007,White,38,Female,English
+Younger,2009,South Asian,37,Female,Indian 
+Older,2010,South Asian,68,Female,British
+Older,2011,South Asian,68,Male,British
+Younger,2013,South Asian,22,Male,Indian 
+Older,2015,South Asian,60,Female,British
+Younger,2016,Black,23,Female,British Nigerian
+Older,2017,South Asian,77,Female,British
+Younger,2019,South Asian,31,Female,Indian 
+Younger,2023,South Asian,29,Female,Canadian
+Younger,2024,Black,20,Male,British
+Younger,2025,South Asian,26,Male,Pakistani
+Younger,2026,South Asian,39,Female,British
+Younger,2029,South Asian,29,Female,British
+Younger,2030,South Asian,40,Male,British
+Younger,2034,South Asian,26,Male,British
+Younger,2035,South Asian,25,Female,British
+Younger,2037,Black,31,Female,British
+Younger,2041,Black,27,Female,British
+Younger,2043,Black,33,Male,Nigerian
+Younger,2044,South Asian,22,Female,British
+Older,2188,South Asian,63,Male,Malaysian
+Older,2213,Black,60,Male,Indian
+Older,2230,Black,62,Female,American 
+Older,2233,Black,61,Male,British
+Older,2240,Black,61,Female,British
+Older,2241,South Asian,61,Male,Indian 
+Older,2244,Black,60,Female,Kenyan
+Older,2254,South Asian,90,Male,British Pakistani
+Older,2271,South Asian,62,Female,Indian
+Older,2297,Black,61,Female,American 
+Older,2301,Black,63,Male,Kenyan
+Younger,3125,Black,23,Male,Italian
+Younger,3126,South Asian,28,Male,British
+Older,3130,White,72,Female,English
+Younger,3132,South Asian,18,Male,British

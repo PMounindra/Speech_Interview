@@ -1,0 +1,150 @@
+{
+  "n_utterances": 5000,
+  "n_speakers": 250,
+  "n_folds": 5,
+  "input_features": [
+    "pitch_mean",
+    "pitch_std",
+    "pitch_range",
+    "voiced_frame_ratio",
+    "rms_mean",
+    "rms_std",
+    "rms_range",
+    "spectral_centroid_mean",
+    "spectral_centroid_std",
+    "spectral_bandwidth_mean",
+    "spectral_bandwidth_std",
+    "spectral_rolloff_mean",
+    "spectral_rolloff_std",
+    "zero_crossing_rate_mean",
+    "zero_crossing_rate_std",
+    "mfcc_01_mean",
+    "mfcc_01_std",
+    "mfcc_02_mean",
+    "mfcc_02_std",
+    "mfcc_03_mean",
+    "mfcc_03_std",
+    "mfcc_04_mean",
+    "mfcc_04_std",
+    "mfcc_05_mean",
+    "mfcc_05_std",
+    "mfcc_06_mean",
+    "mfcc_06_std",
+    "mfcc_07_mean",
+    "mfcc_07_std",
+    "mfcc_08_mean",
+    "mfcc_08_std",
+    "mfcc_09_mean",
+    "mfcc_09_std",
+    "mfcc_10_mean",
+    "mfcc_10_std",
+    "mfcc_11_mean",
+    "mfcc_11_std",
+    "mfcc_12_mean",
+    "mfcc_12_std",
+    "mfcc_13_mean",
+    "mfcc_13_std"
+  ],
+  "targets": {
+    "wpm_speech_duration": {
+      "cv": {
+        "elasticnet_mae_mean": 28.424708976208393,
+        "elasticnet_r2_mean": 0.31674624653189404,
+        "elasticnet_pcc_mean": 0.5691192835455928,
+        "random_forest_mae_mean": 29.629481873943092,
+        "random_forest_r2_mean": 0.24806772368743285,
+        "random_forest_pcc_mean": 0.5022859923069249,
+        "gradient_boosting_mae_mean": 29.30590218335333,
+        "gradient_boosting_r2_mean": 0.26749836919507664,
+        "gradient_boosting_pcc_mean": 0.5227540257315317,
+        "svr_mae_mean": 29.791236845056925,
+        "svr_r2_mean": 0.22928459791766814,
+        "svr_pcc_mean": 0.5210741174629867,
+        "xgboost_mae_mean": 29.08434077455509,
+        "xgboost_r2_mean": 0.2791691237417164,
+        "xgboost_pcc_mean": 0.538019819879938
+      },
+      "literature": [
+        {
+          "source": "Wang & Narayanan, IEEE TASLP 2007 -- acoustic-only speech rate via syllable-nucleus detection (no ASR)",
+          "metric": "established feasibility, no single R2 reported"
+        },
+        {
+          "source": "Acoustic-only SVM predicting intelligible speaking rate (ALS speech study)",
+          "metric": "R2",
+          "value": 0.65
+        }
+      ]
+    },
+    "pause_ratio": {
+      "cv": {
+        "elasticnet_mae_mean": 0.05968208793413658,
+        "elasticnet_r2_mean": 0.16422854813816337,
+        "elasticnet_pcc_mean": 0.43758106339770747,
+        "random_forest_mae_mean": 0.059857257184963944,
+        "random_forest_r2_mean": 0.12145147112087055,
+        "random_forest_pcc_mean": 0.3844851460455767,
+        "gradient_boosting_mae_mean": 0.05653129845129512,
+        "gradient_boosting_r2_mean": 0.21686476544797753,
+        "gradient_boosting_pcc_mean": 0.4866825386085849,
+        "svr_mae_mean": 0.0637244584821566,
+        "svr_r2_mean": 0.1030303110109014,
+        "svr_pcc_mean": 0.42597236891233053,
+        "xgboost_mae_mean": 0.055820507452451075,
+        "xgboost_r2_mean": 0.22897320236080856,
+        "xgboost_pcc_mean": 0.4960536357091544
+      },
+      "literature": [
+        {
+          "source": "No published acoustic-only pause-ratio regression with a reported correlation found",
+          "metric": "gap in the literature -- see training/train_signal_regressors.py docstring"
+        }
+      ]
+    },
+    "pause_count": {
+      "cv": {
+        "elasticnet_mae_mean": 1.5670724198548864,
+        "elasticnet_r2_mean": 0.130887469698636,
+        "elasticnet_pcc_mean": 0.3938277387137837,
+        "random_forest_mae_mean": 1.554024444780006,
+        "random_forest_r2_mean": 0.10594977800943448,
+        "random_forest_pcc_mean": 0.3625350822797535,
+        "gradient_boosting_mae_mean": 1.4894826424835335,
+        "gradient_boosting_r2_mean": 0.17437873023457814,
+        "gradient_boosting_pcc_mean": 0.42837927483419447,
+        "svr_mae_mean": 1.4319547436081774,
+        "svr_r2_mean": 0.1315737674062323,
+        "svr_pcc_mean": 0.40808940520967296,
+        "xgboost_mae_mean": 1.446815891063912,
+        "xgboost_r2_mean": 0.22402973355926994,
+        "xgboost_pcc_mean": 0.48191511588009783
+      },
+      "literature": []
+    },
+    "fillers_per_100_words": {
+      "cv": {
+        "elasticnet_mae_mean": 0.9558306195888336,
+        "elasticnet_r2_mean": 0.0046564529116258635,
+        "elasticnet_pcc_mean": 0.07391028613030147,
+        "random_forest_mae_mean": 0.9685038301533557,
+        "random_forest_r2_mean": -0.02782832408647855,
+        "random_forest_pcc_mean": 0.04627773661960628,
+        "gradient_boosting_mae_mean": 1.0028604488862176,
+        "gradient_boosting_r2_mean": -0.08003701295681416,
+        "gradient_boosting_pcc_mean": 0.03324217087495949,
+        "svr_mae_mean": 0.5612159309655684,
+        "svr_r2_mean": -0.021151481625774293,
+        "svr_pcc_mean": 0.00436916556985508,
+        "xgboost_mae_mean": 1.1205161056047903,
+        "xgboost_r2_mean": -0.13402349010576806,
+        "xgboost_pcc_mean": 0.017444109705857684
+      },
+      "literature": [
+        {
+          "source": "Shriberg, Bates & Stolcke 1997 -- prosody-only decision tree disfluency detector (no ASR)",
+          "metric": "significantly better than chance, no single correlation reported"
+        }
+      ]
+    }
+  }
+}

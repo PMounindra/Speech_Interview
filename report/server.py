@@ -55,7 +55,10 @@ FIELDS = [
 # model_size so switching sizes across requests doesn't require a server restart.
 _whisper_models = {}
 VALID_WHISPER_SIZES = {"tiny", "base", "small", "medium", "large-v3"}
-DEFAULT_WHISPER_SIZE = "base"
+# "base" silently produced zero transcribed segments on a real, non-silent, clearly-spoken
+# 28s test recording that "small" transcribed correctly -- not a decode/language bug, "base"
+# is just too weak for real-world mic audio. "small" is still CPU-fast enough for live use.
+DEFAULT_WHISPER_SIZE = "small"
 
 EXT_BY_CONTENT_TYPE = {
     "video/webm": ".webm", "audio/webm": ".webm", "audio/wav": ".wav",
@@ -70,9 +73,24 @@ def get_whisper_model(model_size=DEFAULT_WHISPER_SIZE):
     return _whisper_models[model_size]
 
 
-def transcribe_with_cached_model(audio_path: str, model_size: str = DEFAULT_WHISPER_SIZE) -> dict:
-    model = get_whisper_model(model_size)
-    segments, info = model.transcribe(audio_path, word_timestamps=True)
+def _run_whisper(model, audio_path: str) -> dict:
+    # Force English rather than auto-detecting: on a quiet/ambient/short clip, Whisper's
+    # language classifier can confidently guess wrong (seen in practice: a real 28s English
+    # recording misdetected as Nepali at 24% confidence), and transcribing under the wrong
+    # language can silently produce zero segments even though real speech is present.
+    #
+    # no_speech_threshold/log_prob_threshold loosened from faster-whisper's defaults (0.6 /
+    # -1.0): a real recording with completely normal, non-silent, tonal/harmonic audio hit
+    # faster-whisper's internal no-speech rejection (no_speech_prob ~0.75, right at the
+    # default threshold) and came back with ZERO segments -- while the exact same bytes,
+    # re-run moments later, transcribed cleanly (93 words). That's run-to-run floating-point
+    # nondeterminism in CPU multi-threaded inference flipping a borderline decision, not a
+    # genuinely silent recording. Loosening these thresholds makes Whisper attempt decoding
+    # instead of rejecting a segment outright on a borderline no-speech score.
+    segments, info = model.transcribe(
+        audio_path, word_timestamps=True, language="en",
+        no_speech_threshold=0.9, log_prob_threshold=-2.0,
+    )
 
     words, full_text_parts = [], []
     for segment in segments:
@@ -92,6 +110,20 @@ def transcribe_with_cached_model(audio_path: str, model_size: str = DEFAULT_WHIS
         # from word_count == 0, which is also the correct result for genuine silence.
         "transcription_empty": len(text) == 0,
     }
+
+
+def transcribe_with_cached_model(audio_path: str, model_size: str = DEFAULT_WHISPER_SIZE) -> dict:
+    model = get_whisper_model(model_size)
+    result = _run_whisper(model, audio_path)
+    if result["word_count"] == 0:
+        # One retry: the empty result can be run-to-run floating-point nondeterminism
+        # (see _run_whisper's docstring) rather than genuine silence -- a second attempt on
+        # the identical bytes has a real chance of succeeding where the first one didn't.
+        print(f"[warn] transcription came back empty for {audio_path} -- retrying once", flush=True)
+        retry = _run_whisper(model, audio_path)
+        if retry["word_count"] > 0:
+            return retry
+    return result
 
 
 def invalid_score_fields(payload: dict, fields: list, lo: float = MIN_SCORE, hi: float = MAX_SCORE) -> list:
@@ -155,7 +187,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _process_one_track(self, audio_path: Path, out_dir: Path, model_size: str = DEFAULT_WHISPER_SIZE):
         """Transcribe + measure + predict for a single audio file. Shared by the
         plain (one-speaker) path and each speaker's track in diarized mode."""
-        from compute_metrics import compute_metrics
+        from compute_metrics import compute_metrics, load_audio_any_format
 
         transcript = transcribe_with_cached_model(str(audio_path), model_size=model_size)
         transcript_path = out_dir / "transcript.json"
@@ -169,6 +201,16 @@ class Handler(SimpleHTTPRequestHandler):
             prediction = predict(metrics)
         except FileNotFoundError:
             prediction = {"error": "fluency model not trained yet"}
+
+        try:
+            from confidence_features import extract_confidence_features_from_array, predict_confidence
+            y, sr = load_audio_any_format(str(audio_path))
+            confidence_feats = extract_confidence_features_from_array(y, sr)
+            prediction["confidence"] = predict_confidence(features=confidence_feats)
+        except FileNotFoundError:
+            prediction["confidence"] = {"error": "confidence model not trained yet"}
+        except Exception as e:
+            prediction["confidence"] = {"error": f"confidence extraction failed: {e!r}"}
 
         return transcript, metrics, prediction
 
@@ -378,6 +420,12 @@ def warm_up():
             pass  # a single warm-up tone may not split into 2+ segments; that's fine, the real crash points above still got exercised
 
         transcribe_with_cached_model(str(wav_path))
+
+        from confidence_features import extract_confidence_features, predict_confidence
+        try:
+            predict_confidence(features=extract_confidence_features(str(wav_path)))
+        except FileNotFoundError:
+            print("WARNING: confidence model not trained yet -- run training/train_confidence_classifier.py", flush=True)
 
     print("Warm-up done.", flush=True)
 
