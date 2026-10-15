@@ -7,6 +7,8 @@ soundfile
 joblib
 faster-whisper
 noisereduce
+resemblyzer  # preferred diarization embedding in metrics/diarize.py; falls back to an
+             # MFCC+KMeans method if this isn't installed
 
 # Training / notebooks (Phase2-5, training/*.py) -- not required to run the live app,
 # only to re-extract features, retrain models, or re-run the .ipynb notebooks
