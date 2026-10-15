@@ -21,3 +21,9 @@ dependencies:
       - seaborn
       - tqdm
       - joblib
+      - faster-whisper
+      - noisereduce
+      - resemblyzer
+      - torch
+      - transformers
+      - pyarrow

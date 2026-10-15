@@ -36,6 +36,11 @@ DATA_DIR = ROOT_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 RATINGS_CSV = DATA_DIR / "collected_ratings.csv"
 
+# Guards against an unbounded in-memory read on /api/process: 150 MB covers well over
+# 30 minutes of webm/opus at typical browser bitrates, far beyond any real interview answer.
+MAX_UPLOAD_BYTES = 150 * 1024 * 1024
+MIN_SCORE, MAX_SCORE = 1, 5
+
 sys.path.insert(0, str(ROOT_DIR / "metrics"))
 sys.path.insert(0, str(ROOT_DIR / "transcript"))
 
@@ -46,8 +51,11 @@ FIELDS = [
     "wpm_speech_duration", "pause_ratio", "fillers_per_100_words", "speech_ratio",
 ]
 
-# Loaded lazily, cached across requests (model load is the expensive part).
-_whisper_model = None
+# Loaded lazily, cached across requests (model load is the expensive part). Keyed by
+# model_size so switching sizes across requests doesn't require a server restart.
+_whisper_models = {}
+VALID_WHISPER_SIZES = {"tiny", "base", "small", "medium", "large-v3"}
+DEFAULT_WHISPER_SIZE = "base"
 
 EXT_BY_CONTENT_TYPE = {
     "video/webm": ".webm", "audio/webm": ".webm", "audio/wav": ".wav",
@@ -55,16 +63,15 @@ EXT_BY_CONTENT_TYPE = {
 }
 
 
-def get_whisper_model(model_size="base"):
-    global _whisper_model
-    if _whisper_model is None:
+def get_whisper_model(model_size=DEFAULT_WHISPER_SIZE):
+    if model_size not in _whisper_models:
         from faster_whisper import WhisperModel
-        _whisper_model = WhisperModel(model_size, device="cpu", compute_type="int8")
-    return _whisper_model
+        _whisper_models[model_size] = WhisperModel(model_size, device="cpu", compute_type="int8")
+    return _whisper_models[model_size]
 
 
-def transcribe_with_cached_model(audio_path: str) -> dict:
-    model = get_whisper_model()
+def transcribe_with_cached_model(audio_path: str, model_size: str = DEFAULT_WHISPER_SIZE) -> dict:
+    model = get_whisper_model(model_size)
     segments, info = model.transcribe(audio_path, word_timestamps=True)
 
     words, full_text_parts = [], []
@@ -74,13 +81,33 @@ def transcribe_with_cached_model(audio_path: str) -> dict:
             for w in segment.words:
                 words.append({"word": w.word.strip(), "start": round(w.start, 3), "end": round(w.end, 3)})
 
+    text = " ".join(full_text_parts).strip()
     return {
         "language": info.language,
         "duration_sec": round(info.duration, 3),
-        "text": " ".join(full_text_parts).strip(),
+        "text": text,
         "words": words,
         "word_count": len(words),
+        # Explicit signal for "nothing was transcribed" so callers don't have to infer it
+        # from word_count == 0, which is also the correct result for genuine silence.
+        "transcription_empty": len(text) == 0,
     }
+
+
+def invalid_score_fields(payload: dict, fields: list, lo: float = MIN_SCORE, hi: float = MAX_SCORE) -> list:
+    """Return the subset of `fields` whose value in `payload` is missing, non-numeric,
+    or outside [lo, hi]. Pure function so rating validation is unit-testable without a
+    live HTTP server."""
+    invalid = []
+    for f in fields:
+        try:
+            v = float(payload[f])
+        except (TypeError, ValueError, KeyError):
+            invalid.append(f)
+            continue
+        if not (lo <= v <= hi):
+            invalid.append(f)
+    return invalid
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -115,12 +142,22 @@ class Handler(SimpleHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def _process_one_track(self, audio_path: Path, out_dir: Path):
+    def _send_error_json(self, code: int, log_detail: str, client_message: str):
+        """Log the real exception/detail server-side (may contain local paths or stack
+        traces) and send only a generic, safe message to the client."""
+        print(f"[error] {self.path} -> {code}: {log_detail}", file=sys.stderr)
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self._cors()
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": client_message}).encode("utf-8"))
+
+    def _process_one_track(self, audio_path: Path, out_dir: Path, model_size: str = DEFAULT_WHISPER_SIZE):
         """Transcribe + measure + predict for a single audio file. Shared by the
         plain (one-speaker) path and each speaker's track in diarized mode."""
         from compute_metrics import compute_metrics
 
-        transcript = transcribe_with_cached_model(str(audio_path))
+        transcript = transcribe_with_cached_model(str(audio_path), model_size=model_size)
         transcript_path = out_dir / "transcript.json"
         transcript_path.write_text(json.dumps(transcript, indent=2), encoding="utf-8")
 
@@ -138,10 +175,24 @@ class Handler(SimpleHTTPRequestHandler):
     def _handle_process(self):
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
         diarize_requested = query.get("diarize", ["0"])[0] == "1"
+        model_size = query.get("model_size", [DEFAULT_WHISPER_SIZE])[0]
+        if model_size not in VALID_WHISPER_SIZES:
+            return self._send_error_json(
+                400, f"invalid model_size={model_size!r}",
+                f"model_size must be one of {sorted(VALID_WHISPER_SIZES)}",
+            )
 
         content_type = self.headers.get("Content-Type", "video/webm")
         ext = EXT_BY_CONTENT_TYPE.get(content_type, ".webm")
         length = int(self.headers.get("Content-Length", 0))
+
+        if length <= 0:
+            return self._send_error_json(400, f"empty/invalid Content-Length={length}", "Empty recording received.")
+        if length > MAX_UPLOAD_BYTES:
+            return self._send_error_json(
+                413, f"upload too large: {length} bytes",
+                f"Recording exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+            )
         raw = self.rfile.read(length)
 
         session_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
@@ -152,9 +203,9 @@ class Handler(SimpleHTTPRequestHandler):
 
         try:
             if diarize_requested:
-                result = self._process_diarized(audio_path, session_id, session_dir)
+                result = self._process_diarized(audio_path, session_id, session_dir, model_size=model_size)
             else:
-                transcript, metrics, prediction = self._process_one_track(audio_path, session_dir)
+                transcript, metrics, prediction = self._process_one_track(audio_path, session_dir, model_size=model_size)
                 result = {
                     "session_id": session_id,
                     "diarized": False,
@@ -165,11 +216,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "prediction": prediction,
                 }
         except Exception as e:
-            self.send_response(500)
-            self._cors()
-            self.end_headers()
-            self.wfile.write(str(e).encode("utf-8"))
-            return
+            return self._send_error_json(500, repr(e), "Processing failed on the server. Check server logs.")
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -177,7 +224,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(result).encode("utf-8"))
 
-    def _process_diarized(self, audio_path: Path, session_id: str, session_dir: Path):
+    def _process_diarized(self, audio_path: Path, session_id: str, session_dir: Path, model_size: str = DEFAULT_WHISPER_SIZE):
         from diarize import diarize, write_speaker_tracks
 
         y, sr, segments, embed_method = diarize(str(audio_path))
@@ -192,7 +239,7 @@ class Handler(SimpleHTTPRequestHandler):
         for speaker_idx, track_path in sorted(track_paths.items()):
             speaker_dir = diarized_dir / f"speaker_{speaker_idx}"
             speaker_dir.mkdir(parents=True, exist_ok=True)
-            transcript, metrics, prediction = self._process_one_track(track_path, speaker_dir)
+            transcript, metrics, prediction = self._process_one_track(track_path, speaker_dir, model_size=model_size)
             speakers.append({
                 "speaker": speaker_idx,
                 "total_speech_seconds": round(total_by_speaker.get(speaker_idx, 0), 2),
@@ -216,20 +263,19 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
         except (ValueError, UnicodeDecodeError) as e:
-            self.send_response(400)
-            self._cors()
-            self.end_headers()
-            self.wfile.write(str(e).encode("utf-8"))
-            return
+            return self._send_error_json(400, repr(e), "Request body is not valid JSON.")
 
         required = ["fluency_score", "clarity_score", "delivery_score", "overall_communication_score"]
         missing = [f for f in required if payload.get(f) is None]
         if missing:
-            self.send_response(400)
-            self._cors()
-            self.end_headers()
-            self.wfile.write(f"Missing required fields: {missing}".encode("utf-8"))
-            return
+            return self._send_error_json(400, f"missing fields: {missing}", f"Missing required fields: {missing}")
+
+        invalid = invalid_score_fields(payload, required)
+        if invalid:
+            return self._send_error_json(
+                400, f"out-of-range/non-numeric fields: {invalid}",
+                f"These fields must be numbers between {MIN_SCORE} and {MAX_SCORE}: {invalid}",
+            )
 
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         is_new = not RATINGS_CSV.exists()
@@ -250,27 +296,15 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             metrics = json.loads(self.rfile.read(length).decode("utf-8"))
         except (ValueError, UnicodeDecodeError) as e:
-            self.send_response(400)
-            self._cors()
-            self.end_headers()
-            self.wfile.write(str(e).encode("utf-8"))
-            return
+            return self._send_error_json(400, repr(e), "Request body is not valid JSON.")
 
         try:
             from predict_fluency import predict
             result = predict(metrics)
         except FileNotFoundError as e:
-            self.send_response(503)
-            self._cors()
-            self.end_headers()
-            self.wfile.write(str(e).encode("utf-8"))
-            return
+            return self._send_error_json(503, repr(e), "Fluency model is not trained/available on the server yet.")
         except Exception as e:
-            self.send_response(500)
-            self._cors()
-            self.end_headers()
-            self.wfile.write(str(e).encode("utf-8"))
-            return
+            return self._send_error_json(500, repr(e), "Prediction failed on the server. Check server logs.")
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

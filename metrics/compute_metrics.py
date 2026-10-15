@@ -127,11 +127,56 @@ def safe_stats(x, prefix):
     }
 
 
+def word_timestamp_pause_features(words):
+    """Cross-check for pause_features(): gaps between consecutive Whisper word
+    timestamps, independent of the audio-level VAD split used elsewhere. Only
+    meaningful when at least two words were transcribed; VAD-based pause_features()
+    remains the primary measure since it also covers non-speech sections with no
+    words at all (e.g. a silent recording)."""
+    if len(words) < 2:
+        return {
+            "word_gap_pause_count": 0,
+            "word_gap_mean_pause_duration": None,
+            "word_gap_max_pause_duration": None,
+            "word_gap_long_pause_count": 0,
+        }
+
+    gaps = np.array([
+        words[i]["start"] - words[i - 1]["end"]
+        for i in range(1, len(words))
+        if words[i]["start"] > words[i - 1]["end"]
+    ], dtype=np.float32)
+
+    if len(gaps) == 0:
+        return {
+            "word_gap_pause_count": 0,
+            "word_gap_mean_pause_duration": 0.0,
+            "word_gap_max_pause_duration": 0.0,
+            "word_gap_long_pause_count": 0,
+        }
+
+    return {
+        "word_gap_pause_count": int(len(gaps)),
+        "word_gap_mean_pause_duration": float(np.mean(gaps)),
+        "word_gap_max_pause_duration": float(np.max(gaps)),
+        "word_gap_long_pause_count": int(np.sum(gaps >= LONG_PAUSE_THRESHOLD)),
+    }
+
+
 def pause_features(y, sr):
     total = len(y) / sr
-    intervals = librosa.effects.split(
-        y, top_db=SILENCE_TOP_DB, frame_length=N_FFT, hop_length=HOP_LENGTH
-    )
+
+    # librosa.effects.split's dB threshold is relative to the signal's own peak
+    # amplitude. On a flat/near-silent signal that peak is ~0, so the ratio-to-peak
+    # comparison degenerates and split() reports the *entire* clip as one "speech"
+    # interval instead of silence. Treat near-zero-amplitude audio as all-silence
+    # explicitly rather than relying on split() for this degenerate case.
+    if len(y) == 0 or float(np.max(np.abs(y))) < 1e-4:
+        intervals = np.empty((0, 2), dtype=int)
+    else:
+        intervals = librosa.effects.split(
+            y, top_db=SILENCE_TOP_DB, frame_length=N_FFT, hop_length=HOP_LENGTH
+        )
 
     if len(intervals) == 0:
         return {
@@ -241,8 +286,10 @@ def compute_metrics(audio_path: str, transcript_path: str, include_spectral: boo
 
     transcript = json.loads(Path(transcript_path).read_text(encoding="utf-8"))
     text = transcript.get("text", "")
+    words_ts = transcript.get("words", [])
 
     pause = pause_features(y, sr)
+    word_gap_pause = word_timestamp_pause_features(words_ts)
     ling = linguistic_features(text)
     fill = filler_features(text)
 
@@ -263,10 +310,14 @@ def compute_metrics(audio_path: str, transcript_path: str, include_spectral: boo
         "wpm_speech_duration": float(wpm_speech_duration) if np.isfinite(wpm_speech_duration) else None,
         "wpm_total_duration": float(wpm_total_duration) if np.isfinite(wpm_total_duration) else None,
         "words_per_second": float(words_per_second) if np.isfinite(words_per_second) else None,
+        # Explicit "nothing was transcribed" signal (distinct from word_count == 0 arising
+        # from genuine silence) so callers don't have to guess why WPM/fillers are zero.
+        "transcription_empty": bool(transcript.get("transcription_empty", len(text.strip()) == 0)),
     }
 
     out.update(safe_stats(rms, "rms"))
     out.update(pause)
+    out.update(word_gap_pause)
     out.update(pitch_features(y, sr))
     if include_spectral:
         out.update(spectral_mfcc_features(y, sr))
