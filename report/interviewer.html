@@ -161,6 +161,21 @@
   </section>
 
   <section>
+    <h2>Confidence: how confident does this speech sound</h2>
+    <div class="empty" id="confidenceEmpty">Record or load a recording to see a confidence read.</div>
+    <div id="confidenceBody" style="display:none;">
+      <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:10px;">
+        <div id="confidenceLabel" style="font-size:32px; font-weight:700;"></div>
+        <div id="confidenceScore" style="font-size:16px; color:var(--quiet);"></div>
+      </div>
+      <div style="background:var(--border); height:10px; border-radius:6px; overflow:hidden; margin-bottom:10px;">
+        <div id="confidenceBar" style="height:100%; background:#4f8cff; width:0%;"></div>
+      </div>
+      <div style="font-size:12px; color:var(--quiet); border-top:1px solid var(--border); padding-top:10px;" id="confidenceCaveat"></div>
+    </div>
+  </section>
+
+  <section>
     <h2>Transcript</h2>
     <div id="transcriptText"></div>
     <div class="empty" id="transcriptEmpty">Load transcript.json to see the transcript.</div>
@@ -385,7 +400,39 @@
   const predictionTop = document.getElementById('predictionTop');
   const predictionCaveat = document.getElementById('predictionCaveat');
 
+  // --- Confidence (separate model, separate section: acoustic-only, doesn't need
+  // transcribed words, so it must render independently of whether fluency succeeded) ---
+  const confidenceEmpty = document.getElementById('confidenceEmpty');
+  const confidenceBody = document.getElementById('confidenceBody');
+  const confidenceLabel = document.getElementById('confidenceLabel');
+  const confidenceScore = document.getElementById('confidenceScore');
+  const confidenceBar = document.getElementById('confidenceBar');
+  const confidenceCaveat = document.getElementById('confidenceCaveat');
+
+  function renderConfidenceSection(confidence) {
+    if (!confidence || confidence.error) {
+      confidenceEmpty.textContent = (confidence && confidence.error) || 'Confidence model not available yet (has training/train_confidence_classifier.py been run?)';
+      confidenceEmpty.style.display = 'block';
+      confidenceBody.style.display = 'none';
+      return;
+    }
+    const pct = Math.round(confidence.confidence_probability * 100);
+    confidenceLabel.textContent = confidence.label === 'trustworthy' ? 'Confident-sounding' : 'Neutral-sounding';
+    confidenceScore.textContent = `${pct}% confident-sounding (predicted)`;
+    confidenceBar.style.width = `${pct}%`;
+    confidenceBar.style.background = confidence.label === 'trustworthy' ? '#3ac17a' : '#4f8cff';
+    confidenceCaveat.textContent = confidence.model_caveat || '';
+    confidenceEmpty.style.display = 'none';
+    confidenceBody.style.display = 'block';
+  }
+
   function renderPrediction(result) {
+    // Fluency and confidence are two independent models over the same recording --
+    // fluency needs transcribed words (and can legitimately fail on a silent/empty
+    // transcript), confidence is acoustic-only and doesn't. Render confidence
+    // unconditionally so a fluency failure never hides it.
+    renderConfidenceSection(result && result.confidence);
+
     if (!result || result.error) {
       predictionEmpty.textContent = (result && result.error) || 'Model not available yet (has training/train_communication_model.py been run?)';
       predictionEmpty.style.display = 'block';

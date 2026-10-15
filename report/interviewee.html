@@ -97,6 +97,18 @@
     <div class="sub2" id="headlineSub"></div>
   </div>
 
+  <div class="headline" id="confidenceSection">
+    <div class="big" style="font-size:14px; color:var(--quiet); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px;">How confident did you sound?</div>
+    <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:10px;">
+      <div id="confidenceLabel" style="font-size:26px; font-weight:700;"></div>
+      <div id="confidenceScore" style="font-size:14px; color:var(--quiet);"></div>
+    </div>
+    <div style="background:var(--border); height:8px; border-radius:5px; overflow:hidden; margin-bottom:10px;">
+      <div id="confidenceBar" style="height:100%; background:var(--accent); width:0%;"></div>
+    </div>
+    <div class="sub2" id="confidenceCaveat"></div>
+  </div>
+
   <div class="points" id="points"></div>
 
   <div class="player-section" id="playerSection">
@@ -117,6 +129,25 @@
   const pointsEl = document.getElementById('points');
   const playerSection = document.getElementById('playerSection');
   const player = document.getElementById('player');
+  const confidenceSection = document.getElementById('confidenceSection');
+  const confidenceLabel = document.getElementById('confidenceLabel');
+  const confidenceScore = document.getElementById('confidenceScore');
+  const confidenceBar = document.getElementById('confidenceBar');
+  const confidenceCaveat = document.getElementById('confidenceCaveat');
+
+  function renderConfidenceCard(confidence) {
+    if (!confidence || confidence.error) {
+      confidenceSection.style.display = 'none';
+      return;
+    }
+    const pct = Math.round(confidence.confidence_probability * 100);
+    confidenceLabel.textContent = confidence.label === 'trustworthy' ? 'Confident-sounding' : 'Neutral-sounding';
+    confidenceScore.textContent = `${pct}% confident-sounding (predicted)`;
+    confidenceBar.style.width = `${pct}%`;
+    confidenceBar.style.background = confidence.label === 'trustworthy' ? 'var(--good)' : 'var(--accent)';
+    confidenceCaveat.textContent = confidence.model_caveat || '';
+    confidenceSection.style.display = 'block';
+  }
 
   function renderAudio(blob) {
     player.src = URL.createObjectURL(blob);
@@ -226,6 +257,10 @@
       const result = knownPrediction || await (await fetch('/api/predict', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m),
       })).json();
+      // Fluency and confidence are independent models over the same recording --
+      // fluency needs transcribed words and can legitimately fail on a silent/empty
+      // transcript; confidence is acoustic-only and doesn't depend on that, so a
+      // fluency failure must not hide a confidence result that computed fine.
       if (result && !result.error) {
         const level = result.predicted.communication_level;
         const levelWords = { Low: 'still developing', Medium: 'solidly in the typical range', High: 'notably strong' }[level] || level;
@@ -234,8 +269,10 @@
         extra.innerHTML = `<div class="icon">ℹ️</div><div class="text">Based on a model trained on fluency-rated speech, your overall fluency on this recording looks <strong>${levelWords}</strong>. (This is an estimate from one trained model, not a final judgment.)</div>`;
         pointsEl.appendChild(extra);
       }
+      renderConfidenceCard(result && result.confidence);
     } catch (err) {
       // Prediction API not running -- the rule-based feedback above still stands on its own.
+      renderConfidenceCard(null);
     }
   }
 
